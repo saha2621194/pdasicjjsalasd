@@ -556,9 +556,10 @@ const AdminPanel = ({ user }) => {
   };
 
   const getRequestStats = (requestId) => {
-    const requestInvoices = invoices.filter(inv => inv.requestId === requestId && inv.status !== 'deleted' && inv.status !== 'rejected');
+    const allRequestInvoices = invoices.filter(inv => inv.requestId === requestId && inv.status !== 'deleted');
+    const requestInvoices = allRequestInvoices.filter(inv => inv.status !== 'rejected');
     return {
-      total: requestInvoices.length,
+      total: allRequestInvoices.length, // Всего счетов включая все статусы кроме deleted
       pendingApproval: requestInvoices.filter(inv => inv.status === 'pending_approval').length,
       approved: requestInvoices.filter(inv => ['approved', 'in_logistics'].includes(inv.status)).length,
       inLogistics: requestInvoices.filter(inv => ['in_logistics', 'documents_signed', 'in_transit', 'received', 'closed'].includes(inv.status)).length
@@ -2143,7 +2144,7 @@ const ManagerPanel = ({ user }) => {
         </div>
       )}
 
-      {selectedCompany && (
+      {selectedCompany && activeTab === 'requests' && (
         <>
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-800 mb-4">Доступные заявки</h2>
@@ -2676,6 +2677,10 @@ const LogisticsPanel = ({ user }) => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [activeTab, setActiveTab] = useState('my-invoices'); // вкладки: my-invoices, received-goods, all-invoices
+  const [logistTags, setLogistTags] = useState([]);
+  const [showTagModal, setShowTagModal] = useState(false);
+  const [newTagName, setNewTagName] = useState('');
+  const [newTagColor, setNewTagColor] = useState('#3B82F6');
 
   useEffect(() => {
     loadData();
@@ -2685,19 +2690,21 @@ const LogisticsPanel = ({ user }) => {
 
   const loadData = async () => {
     try {
-      const [invoicesData, requestsData, usersData, companiesData, commentsData] = await Promise.all([
+      const [invoicesData, requestsData, usersData, companiesData, commentsData, tagsData] = await Promise.all([
         api.getInvoices(),
         api.getRequests(),
         api.getUsers(),
         api.getCompanies(),
-        api.getComments()
+        api.getComments(),
+        fetch(`${API_URL}/logist-tags/${user.id}`).then(r => r.json())
       ]);
-      
+
       setInvoices(invoicesData);
       setRequests(requestsData);
       setUsers(usersData);
       setCompanies(companiesData);
       setComments(commentsData);
+      setLogistTags(tagsData);
     } catch (error) {
       console.error('Ошибка загрузки данных:', error);
     }
@@ -2776,6 +2783,69 @@ const LogisticsPanel = ({ user }) => {
       await loadData();
     } catch (error) {
       alert('Ошибка добавления комментария');
+    }
+  };
+
+  // Функции для работы с тегами
+  const handleCreateTag = async () => {
+    if (!newTagName.trim()) {
+      alert('Введите название тега');
+      return;
+    }
+
+    try {
+      await fetch(`${API_URL}/logist-tags`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: Date.now().toString(),
+          logistId: user.id,
+          name: newTagName,
+          color: newTagColor,
+          createdAt: new Date().toISOString()
+        })
+      });
+      setNewTagName('');
+      setNewTagColor('#3B82F6');
+      setShowTagModal(false);
+      await loadData();
+    } catch (error) {
+      alert('Ошибка создания тега');
+    }
+  };
+
+  const handleDeleteTag = async (tagId) => {
+    if (!confirm('Удалить тег? Он будет удалён из всех счетов.')) return;
+
+    try {
+      await fetch(`${API_URL}/logist-tags/${tagId}`, {
+        method: 'DELETE'
+      });
+      // Удаляем тег из всех счетов
+      const updatedInvoices = invoices.filter(inv => inv.logistId === user.id && inv.tags && inv.tags.includes(tagId));
+      await Promise.all(
+        updatedInvoices.map(inv =>
+          api.updateInvoice(inv.id, { tags: inv.tags.filter(t => t !== tagId) })
+        )
+      );
+      await loadData();
+    } catch (error) {
+      alert('Ошибка удаления тега');
+    }
+  };
+
+  const handleToggleInvoiceTag = async (invoiceId, tagId) => {
+    try {
+      const invoice = invoices.find(inv => inv.id === invoiceId);
+      const currentTags = invoice.tags || [];
+      const newTags = currentTags.includes(tagId)
+        ? currentTags.filter(t => t !== tagId)
+        : [...currentTags, tagId];
+
+      await api.updateInvoice(invoiceId, { tags: newTags });
+      await loadData();
+    } catch (error) {
+      alert('Ошибка обновления тегов');
     }
   };
 
@@ -2891,7 +2961,89 @@ const LogisticsPanel = ({ user }) => {
 
   return (
     <div className="p-6">
-      <h2 className="text-2xl font-bold text-gray-800 mb-6">Панель логистики</h2>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold text-gray-800">Панель логистики</h2>
+        <button
+          onClick={() => setShowTagModal(true)}
+          className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" />
+          Управление тегами
+        </button>
+      </div>
+
+      {/* Модальное окно для управления тегами */}
+      {showTagModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-800">Мои теги</h3>
+              <button
+                onClick={() => setShowTagModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Создание нового тега */}
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+              <h4 className="font-bold text-gray-700 mb-3">Создать новый тег</h4>
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  value={newTagName}
+                  onChange={(e) => setNewTagName(e.target.value)}
+                  placeholder="Название тега..."
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  onKeyPress={(e) => e.key === 'Enter' && handleCreateTag()}
+                />
+                <input
+                  type="color"
+                  value={newTagColor}
+                  onChange={(e) => setNewTagColor(e.target.value)}
+                  className="w-16 h-10 rounded-lg cursor-pointer"
+                />
+                <button
+                  onClick={handleCreateTag}
+                  className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition"
+                >
+                  Создать
+                </button>
+              </div>
+            </div>
+
+            {/* Список тегов */}
+            <div className="space-y-2">
+              <h4 className="font-bold text-gray-700 mb-3">Мои теги ({logistTags.length})</h4>
+              {logistTags.length === 0 ? (
+                <p className="text-gray-500 text-center py-4">У вас пока нет тегов</p>
+              ) : (
+                logistTags.map(tag => (
+                  <div
+                    key={tag.id}
+                    className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:shadow-md transition"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-4 h-4 rounded"
+                        style={{ backgroundColor: tag.color }}
+                      />
+                      <span className="font-medium text-gray-800">{tag.name}</span>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteTag(tag.id)}
+                      className="text-red-600 hover:text-red-700 p-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ДОБАВЛЕНО: Вкладки */}
       <div className="mb-6 flex gap-4 border-b border-gray-200 overflow-x-auto">
@@ -3047,8 +3199,26 @@ const LogisticsPanel = ({ user }) => {
                        invoice.status === 'documents_signed' ? 'Документы подписаны' :
                        'Товар в пути'}
                     </span>
+                    {/* Теги */}
+                    {invoice.tags && invoice.tags.length > 0 && (
+                      <div className="flex gap-2 flex-wrap">
+                        {invoice.tags.map(tagId => {
+                          const tag = logistTags.find(t => t.id === tagId);
+                          if (!tag) return null;
+                          return (
+                            <span
+                              key={tagId}
+                              className="px-2 py-0.5 rounded text-xs font-medium text-white"
+                              style={{ backgroundColor: tag.color }}
+                            >
+                              {tag.name}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-1 text-sm text-gray-600">
                     <p><span className="font-medium">Заявка:</span> {request?.title || 'Удалена'}</p>
                     <p><span className="font-medium">Компания:</span> {company?.name || 'Не указана'}</p>
@@ -3147,6 +3317,34 @@ const LogisticsPanel = ({ user }) => {
                         </button>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Управление тегами */}
+                  <div className="border-t border-gray-200 pt-4">
+                    <h4 className="font-bold text-gray-800 mb-3">Теги:</h4>
+                    {logistTags.length === 0 ? (
+                      <p className="text-sm text-gray-500">У вас пока нет тегов. Создайте теги в "Управление тегами".</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {logistTags.map(tag => {
+                          const isActive = invoice.tags && invoice.tags.includes(tag.id);
+                          return (
+                            <button
+                              key={tag.id}
+                              onClick={() => handleToggleInvoiceTag(invoice.id, tag.id)}
+                              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                                isActive
+                                  ? 'text-white shadow-md'
+                                  : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
+                              }`}
+                              style={isActive ? { backgroundColor: tag.color } : {}}
+                            >
+                              {tag.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
 
                   {invoice.logisticsComment && (
