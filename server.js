@@ -94,8 +94,8 @@ db.exec(`
     files TEXT,
     status TEXT NOT NULL,
     createdAt TEXT NOT NULL,
-    sentToLogisticsAt TEXT
-	receivedGoodsPhotos TEXT
+    sentToLogisticsAt TEXT,
+    receivedGoodsPhotos TEXT
   );
 
   CREATE TABLE IF NOT EXISTS comments (
@@ -165,7 +165,7 @@ const statements = {
   getRequestById: db.prepare('SELECT * FROM requests WHERE id = ?'),
   
   getAllInvoices: db.prepare('SELECT * FROM invoices'),
-  insertInvoice: db.prepare('INSERT INTO invoices (id, requestId, managerId, logistId, companyId, website, supplier, number, amount, contactPerson, phone, email, logisticsComment, files, status, createdAt, sentToLogisticsAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'),
+  insertInvoice: db.prepare('INSERT INTO invoices (id, requestId, managerId, logistId, companyId, website, supplier, number, amount, contactPerson, phone, email, logisticsComment, files, status, createdAt, sentToLogisticsAt, receivedGoodsPhotos) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'),
   getInvoiceById: db.prepare('SELECT * FROM invoices WHERE id = ?'),
   
   getAllComments: db.prepare('SELECT * FROM comments'),
@@ -451,10 +451,10 @@ app.post('/api/invoices', (req, res) => {
     });
     
     statements.insertInvoice.run(
-      id, requestId, managerId, logistId || null, companyId || null, 
-      website || '', supplier, number, amount, contactPerson, phone, 
-      email || '', logisticsComment || '', JSON.stringify(savedFiles), 
-      status, createdAt, sentToLogisticsAt || null
+      id, requestId, managerId, logistId || null, companyId || null,
+      website || '', supplier, number, amount, contactPerson, phone,
+      email || '', logisticsComment || '', JSON.stringify(savedFiles),
+      status, createdAt, sentToLogisticsAt || null, '[]'
     );
     updateTimestamp();
     res.json({ success: true });
