@@ -2298,7 +2298,8 @@ const ManagerPanel = ({ user }) => {
                 ) : (
                   getRequestInvoices(selectedRequest.id).map(invoice => {
                     const invoiceManager = users.find(u => u.id === invoice.managerId);
-                    
+                    const invoiceLogist = invoice.logistId ? users.find(u => u.id === invoice.logistId) : null;
+
                     return (
                       <div 
                         key={invoice.id} 
@@ -2354,6 +2355,12 @@ const ManagerPanel = ({ user }) => {
                               <p><span className="font-medium">Телефон:</span> {invoice.phone}</p>
                               {invoice.email && <p><span className="font-medium">Email:</span> {invoice.email}</p>}
                               <p><span className="font-medium">Менеджер:</span> {invoiceManager?.name}</p>
+                              {invoiceLogist && (
+                                <p className="flex items-center gap-2">
+                                  <span className="font-medium">Логист:</span>
+                                  <span className="text-green-600 font-semibold">🚚 {invoiceLogist.name}</span>
+                                </p>
+                              )}
                             </div>
                             {invoice.logisticsComment && (
                               <div className="bg-yellow-50 border border-yellow-200 rounded p-2 mt-2">
@@ -2554,6 +2561,7 @@ const ManagerPanel = ({ user }) => {
                     filteredInvoices.map(invoice => {
                       const request = requests.find(r => r.id === invoice.requestId);
                       const company = companies.find(c => c.id === invoice.companyId);
+                      const invoiceLogist = invoice.logistId ? users.find(u => u.id === invoice.logistId) : null;
                       const isExpanded = selectedInvoice === invoice.id;
 
                       return (
@@ -2592,6 +2600,12 @@ const ManagerPanel = ({ user }) => {
                                 <p><span className="font-medium">Сумма:</span> {invoice.amount} ₽</p>
                                 <p><span className="font-medium">Контакт:</span> {invoice.contactPerson}</p>
                                 <p><span className="font-medium">Телефон:</span> {invoice.phone}</p>
+                                {invoiceLogist && (
+                                  <p className="flex items-center gap-2">
+                                    <span className="font-medium">Логист:</span>
+                                    <span className="text-green-600 font-semibold">🚚 {invoiceLogist.name}</span>
+                                  </p>
+                                )}
                               </div>
                             </div>
 
@@ -2774,7 +2788,14 @@ const ManagerPanel = ({ user }) => {
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-1 text-sm text-gray-600">
                                   <p><span className="font-medium">Заявка:</span> {request?.title || 'Удалена'}</p>
                                   <p><span className="font-medium">Компания:</span> {company?.name || 'Не указана'}</p>
-                                  <p><span className="font-medium">Логист:</span> {logist?.name || 'Не назначен'}</p>
+                                  <p className="flex items-center gap-2">
+                                    <span className="font-medium">Логист:</span>
+                                    {logist ? (
+                                      <span className="text-green-600 font-semibold">🚚 {logist.name}</span>
+                                    ) : (
+                                      <span>Не назначен</span>
+                                    )}
+                                  </p>
                                   <p><span className="font-medium">Номер счёта:</span> {invoice.number}</p>
                                   <p><span className="font-medium">Сумма:</span> {invoice.amount} ₽</p>
                                   <p><span className="font-medium">Контакт:</span> {invoice.contactPerson}</p>
