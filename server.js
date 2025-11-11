@@ -17,8 +17,9 @@ const PORT = 3001;
 const UPLOADS_DIR = join(__dirname, 'uploads');
 const COMPANY_DOCS_DIR = join(UPLOADS_DIR, 'company-docs');
 const INVOICE_FILES_DIR = join(UPLOADS_DIR, 'invoice-files');
+const RECEIVED_GOODS_PHOTOS_DIR = join(UPLOADS_DIR, 'received-goods-photos');
 
-[UPLOADS_DIR, COMPANY_DOCS_DIR, INVOICE_FILES_DIR].forEach(dir => {
+[UPLOADS_DIR, COMPANY_DOCS_DIR, INVOICE_FILES_DIR, RECEIVED_GOODS_PHOTOS_DIR].forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -426,7 +427,8 @@ app.get('/api/invoices', (req, res) => {
     const invoices = statements.getAllInvoices.all();
     res.json(invoices.map(i => ({
       ...i,
-      files: i.files ? JSON.parse(i.files) : []
+      files: i.files ? JSON.parse(i.files) : [],
+      receivedGoodsPhotos: i.receivedGoodsPhotos ? JSON.parse(i.receivedGoodsPhotos) : []
     })));
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -473,7 +475,8 @@ app.put('/api/invoices/:id', (req, res) => {
 
     // Парсим текущие файлы
     const currentFiles = currentInvoice.files ? JSON.parse(currentInvoice.files) : [];
-    
+    const currentReceivedGoodsPhotos = currentInvoice.receivedGoodsPhotos ? JSON.parse(currentInvoice.receivedGoodsPhotos) : [];
+
     // Обрабатываем новые файлы если они есть
     let updatedFiles = currentFiles;
     if (req.body.files) {
@@ -487,6 +490,22 @@ app.put('/api/invoices/:id', (req, res) => {
           };
         }
         return file;
+      });
+    }
+
+    // Обрабатываем фотографии полученных товаров
+    let updatedReceivedGoodsPhotos = currentReceivedGoodsPhotos;
+    if (req.body.receivedGoodsPhotos !== undefined) {
+      updatedReceivedGoodsPhotos = req.body.receivedGoodsPhotos.map(photo => {
+        if (photo.data && photo.data.startsWith('data:')) {
+          const savedFilename = saveBase64File(photo.data, photo.name, RECEIVED_GOODS_PHOTOS_DIR);
+          return {
+            name: photo.name,
+            size: photo.size,
+            path: `/uploads/received-goods-photos/${savedFilename}`
+          };
+        }
+        return photo;
       });
     }
 
@@ -505,6 +524,7 @@ app.put('/api/invoices/:id', (req, res) => {
       email: req.body.email !== undefined ? req.body.email : currentInvoice.email,
       logisticsComment: req.body.logisticsComment !== undefined ? req.body.logisticsComment : currentInvoice.logisticsComment,
       files: JSON.stringify(updatedFiles),
+      receivedGoodsPhotos: JSON.stringify(updatedReceivedGoodsPhotos),
       status: req.body.status !== undefined ? req.body.status : currentInvoice.status,
       createdAt: currentInvoice.createdAt,
       sentToLogisticsAt: req.body.sentToLogisticsAt !== undefined ? req.body.sentToLogisticsAt : currentInvoice.sentToLogisticsAt
@@ -512,10 +532,10 @@ app.put('/api/invoices/:id', (req, res) => {
 
     // Выполняем обновление
     const updateStmt = db.prepare(`
-      UPDATE invoices 
-      SET requestId = ?, managerId = ?, logistId = ?, companyId = ?, website = ?, 
-          supplier = ?, number = ?, amount = ?, contactPerson = ?, phone = ?, 
-          email = ?, logisticsComment = ?, files = ?, status = ?, 
+      UPDATE invoices
+      SET requestId = ?, managerId = ?, logistId = ?, companyId = ?, website = ?,
+          supplier = ?, number = ?, amount = ?, contactPerson = ?, phone = ?,
+          email = ?, logisticsComment = ?, files = ?, receivedGoodsPhotos = ?, status = ?,
           createdAt = ?, sentToLogisticsAt = ?
       WHERE id = ?
     `);
@@ -534,6 +554,7 @@ app.put('/api/invoices/:id', (req, res) => {
       updateData.email,
       updateData.logisticsComment,
       updateData.files,
+      updateData.receivedGoodsPhotos,
       updateData.status,
       updateData.createdAt,
       updateData.sentToLogisticsAt,

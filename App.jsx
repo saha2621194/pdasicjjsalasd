@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Plus, Edit2, Trash2, Eye, Upload, Download, MessageSquare, Clock, Building, Package, FileText, Users, LogOut, ChevronDown, ChevronUp, Filter, Search, TrendingUp, BarChart3, Calendar, XCircle } from 'lucide-react';
+import { X, Plus, Edit2, Trash2, Eye, Upload, Download, MessageSquare, Clock, Building, Package, FileText, Users, LogOut, ChevronDown, ChevronUp, Filter, Search, TrendingUp, BarChart3, Calendar, XCircle, Camera, Image as ImageIcon } from 'lucide-react';
 
 const API_URL = 'http://85.209.154.11:3001/api';
 
@@ -1263,7 +1263,7 @@ const AdminPanel = ({ user }) => {
                 </div>
 
                 {/* Детализация по дням */}
-                <div>
+                <div className="mb-8">
                   <h3 className="text-lg font-bold text-gray-800 mb-4">📅 Детализация по дням</h3>
                   <div className="space-y-4">
                     {managersStats.map(manager => (
@@ -1271,7 +1271,7 @@ const AdminPanel = ({ user }) => {
                         <div className="bg-gradient-to-r from-blue-500 to-indigo-500 px-4 py-3">
                           <h4 className="font-bold text-white text-lg">{manager.name}</h4>
                         </div>
-                        
+
                         {Object.keys(manager.byDate).length > 0 ? (
                           <div className="overflow-x-auto">
                             <table className="w-full">
@@ -1319,6 +1319,231 @@ const AdminPanel = ({ user }) => {
                       </div>
                     ))}
                   </div>
+                </div>
+
+                {/* Статистика по логистам */}
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800 mb-4">🚚 Статистика работы логистов</h3>
+
+                  {(() => {
+                    const logists = users.filter(u => u.role === 'logist');
+                    const logistsStats = logists.map(logist => {
+                      const logistInvoices = invoices.filter(inv => inv.logistId === logist.id);
+
+                      return {
+                        name: logist.name,
+                        id: logist.id,
+                        total: logistInvoices.length,
+                        inLogistics: logistInvoices.filter(inv => inv.status === 'in_logistics').length,
+                        documentsSigned: logistInvoices.filter(inv => inv.status === 'documents_signed').length,
+                        inTransit: logistInvoices.filter(inv => inv.status === 'in_transit').length,
+                        received: logistInvoices.filter(inv => inv.status === 'received').length,
+                        closed: logistInvoices.filter(inv => inv.status === 'closed').length,
+                        totalAmount: logistInvoices.reduce((sum, inv) => {
+                          const amount = parseFloat(inv.amount.replace(/[^\d.-]/g, '')) || 0;
+                          return sum + amount;
+                        }, 0),
+                        invoices: logistInvoices
+                      };
+                    });
+
+                    const totalLogistsStats = {
+                      total: logistsStats.reduce((sum, l) => sum + l.total, 0),
+                      inLogistics: logistsStats.reduce((sum, l) => sum + l.inLogistics, 0),
+                      documentsSigned: logistsStats.reduce((sum, l) => sum + l.documentsSigned, 0),
+                      inTransit: logistsStats.reduce((sum, l) => sum + l.inTransit, 0),
+                      received: logistsStats.reduce((sum, l) => sum + l.received, 0),
+                      closed: logistsStats.reduce((sum, l) => sum + l.closed, 0),
+                      totalAmount: logistsStats.reduce((sum, l) => sum + l.totalAmount, 0)
+                    };
+
+                    return (
+                      <>
+                        {/* Общая сводка по логистам */}
+                        <div className="mb-6">
+                          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                            <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg p-4">
+                              <div className="text-3xl font-bold text-blue-700">{totalLogistsStats.total}</div>
+                              <div className="text-xs text-blue-600 mt-1 font-medium">Всего счетов</div>
+                            </div>
+                            <div className="bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg p-4">
+                              <div className="text-3xl font-bold text-purple-700">{totalLogistsStats.inLogistics}</div>
+                              <div className="text-xs text-purple-600 mt-1 font-medium">В логистике</div>
+                            </div>
+                            <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 border-2 border-yellow-300 rounded-lg p-4">
+                              <div className="text-3xl font-bold text-yellow-700">{totalLogistsStats.documentsSigned}</div>
+                              <div className="text-xs text-yellow-600 mt-1 font-medium">Док. подписаны</div>
+                            </div>
+                            <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg p-4">
+                              <div className="text-3xl font-bold text-blue-700">{totalLogistsStats.inTransit}</div>
+                              <div className="text-xs text-blue-600 mt-1 font-medium">Товар в пути</div>
+                            </div>
+                            <div className="bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-300 rounded-lg p-4">
+                              <div className="text-3xl font-bold text-green-700">{totalLogistsStats.received}</div>
+                              <div className="text-xs text-green-600 mt-1 font-medium">Получено</div>
+                            </div>
+                            <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-300 rounded-lg p-4">
+                              <div className="text-3xl font-bold text-gray-700">{totalLogistsStats.closed}</div>
+                              <div className="text-xs text-gray-600 mt-1 font-medium">Закрыто</div>
+                            </div>
+                            <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 border-2 border-indigo-300 rounded-lg p-4">
+                              <div className="text-2xl font-bold text-indigo-700">{totalLogistsStats.totalAmount.toLocaleString('ru-RU')}</div>
+                              <div className="text-xs text-indigo-600 mt-1 font-medium">Рублей</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Таблица по логистам */}
+                        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden mb-6">
+                          <div className="overflow-x-auto">
+                            <table className="w-full">
+                              <thead className="bg-gradient-to-r from-purple-600 to-pink-600 text-white">
+                                <tr>
+                                  <th className="px-4 py-3 text-left text-sm font-bold">Логист</th>
+                                  <th className="px-4 py-3 text-center text-sm font-bold">Всего</th>
+                                  <th className="px-4 py-3 text-center text-sm font-bold">В логистике</th>
+                                  <th className="px-4 py-3 text-center text-sm font-bold">Док. подписаны</th>
+                                  <th className="px-4 py-3 text-center text-sm font-bold">Товар в пути</th>
+                                  <th className="px-4 py-3 text-center text-sm font-bold">Получено</th>
+                                  <th className="px-4 py-3 text-center text-sm font-bold">Закрыто</th>
+                                  <th className="px-4 py-3 text-right text-sm font-bold">Сумма (₽)</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-200">
+                                {logistsStats.map((logist, idx) => (
+                                  <tr key={logist.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{logist.name}</td>
+                                    <td className="px-4 py-3 text-center">
+                                      <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-700 font-bold text-sm">
+                                        {logist.total}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                      <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-purple-100 text-purple-700 font-bold text-sm">
+                                        {logist.inLogistics}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                      <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-yellow-100 text-yellow-700 font-bold text-sm">
+                                        {logist.documentsSigned}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                      <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-700 font-bold text-sm">
+                                        {logist.inTransit}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                      <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-green-100 text-green-700 font-bold text-sm">
+                                        {logist.received}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                      <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 text-gray-700 font-bold text-sm">
+                                        {logist.closed}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-right text-sm font-bold text-gray-900">
+                                      {logist.totalAmount.toLocaleString('ru-RU')}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                              <tfoot className="bg-gradient-to-r from-gray-100 to-gray-200 border-t-2 border-gray-300">
+                                <tr>
+                                  <td className="px-4 py-3 text-sm font-bold text-gray-900">ИТОГО:</td>
+                                  <td className="px-4 py-3 text-center">
+                                    <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-200 text-blue-900 font-bold text-sm">
+                                      {totalLogistsStats.total}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-center">
+                                    <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-purple-200 text-purple-900 font-bold text-sm">
+                                      {totalLogistsStats.inLogistics}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-center">
+                                    <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-yellow-200 text-yellow-900 font-bold text-sm">
+                                      {totalLogistsStats.documentsSigned}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-center">
+                                    <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-200 text-blue-900 font-bold text-sm">
+                                      {totalLogistsStats.inTransit}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-center">
+                                    <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-green-200 text-green-900 font-bold text-sm">
+                                      {totalLogistsStats.received}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-center">
+                                    <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gray-200 text-gray-900 font-bold text-sm">
+                                      {totalLogistsStats.closed}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-right text-sm font-bold text-gray-900">
+                                    {totalLogistsStats.totalAmount.toLocaleString('ru-RU')}
+                                  </td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+                        </div>
+
+                        {/* Детальная информация по товарам каждого логиста */}
+                        <div>
+                          <h4 className="text-md font-bold text-gray-800 mb-3">Детальная информация по товарам</h4>
+                          <div className="space-y-4">
+                            {logistsStats.map(logist => (
+                              <div key={logist.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                                <div className="bg-gradient-to-r from-purple-500 to-pink-500 px-4 py-3">
+                                  <h5 className="font-bold text-white">{logist.name}</h5>
+                                </div>
+                                <div className="p-4">
+                                  {logist.invoices.length > 0 ? (
+                                    <div className="space-y-2">
+                                      {logist.invoices.map(inv => {
+                                        const request = requests.find(r => r.id === inv.requestId);
+                                        const manager = users.find(u => u.id === inv.managerId);
+                                        return (
+                                          <div key={inv.id} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                            <div className="flex-1">
+                                              <div className="font-medium text-gray-900">{inv.supplier}</div>
+                                              <div className="text-xs text-gray-600">
+                                                Заявка: {request?.title || 'Удалена'} | Менеджер: {manager?.name || 'Удалён'} | Сумма: {inv.amount} ₽
+                                              </div>
+                                            </div>
+                                            <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ml-3 ${
+                                              inv.status === 'in_logistics' ? 'bg-purple-100 text-purple-700' :
+                                              inv.status === 'documents_signed' ? 'bg-yellow-100 text-yellow-700' :
+                                              inv.status === 'in_transit' ? 'bg-blue-100 text-blue-700' :
+                                              inv.status === 'received' ? 'bg-green-100 text-green-700' :
+                                              'bg-gray-200 text-gray-700'
+                                            }`}>
+                                              {inv.status === 'in_logistics' ? 'В логистике' :
+                                               inv.status === 'documents_signed' ? 'Док. подписаны' :
+                                               inv.status === 'in_transit' ? 'Товар в пути' :
+                                               inv.status === 'received' ? 'Получено' :
+                                               'Закрыто'}
+                                            </span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-gray-500 italic text-center py-4">
+                                      У логиста пока нет счетов в работе
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </>
             );
@@ -2194,16 +2419,36 @@ const LogisticsPanel = ({ user }) => {
     }
   };
 
-  // ИСПРАВЛЕНО: Теперь корректно обновляет счет
+  // ИСПРАВЛЕНО: Теперь корректно обновляет счет и сразу обновляет локальное состояние
   const handleTakeInvoice = async (invoiceId) => {
     try {
       await api.updateInvoice(invoiceId, { logistId: user.id });
       const invoice = invoices.find(inv => inv.id === invoiceId);
       await addHistory(user, 'Взятие счёта в работу', 'invoice', invoice.supplier);
+      // Немедленное обновление без ожидания
       await loadData();
     } catch (error) {
       console.error('Ошибка взятия счёта:', error);
       alert('Ошибка взятия счёта в работу');
+    }
+  };
+
+  // Функция для передачи счета другому логисту
+  const handleTransferInvoice = async (invoiceId, newLogistId) => {
+    try {
+      const invoice = invoices.find(inv => inv.id === invoiceId);
+      const newLogist = users.find(u => u.id === newLogistId);
+      if (!newLogist) {
+        alert('Логист не найден');
+        return;
+      }
+
+      await api.updateInvoice(invoiceId, { logistId: newLogistId });
+      await addHistory(user, 'Передача счёта логисту', 'invoice', `${invoice.supplier} -> ${newLogist.name}`);
+      await loadData();
+      alert(`Счет успешно передан логисту ${newLogist.name}`);
+    } catch (error) {
+      alert('Ошибка передачи счёта');
     }
   };
 
@@ -2233,7 +2478,7 @@ const LogisticsPanel = ({ user }) => {
 
   const handleAddComment = async (invoiceId) => {
     if (!newComment.trim()) return;
-    
+
     try {
       await api.createComment({
         id: Date.now().toString(),
@@ -2247,6 +2492,58 @@ const LogisticsPanel = ({ user }) => {
       await loadData();
     } catch (error) {
       alert('Ошибка добавления комментария');
+    }
+  };
+
+  // Функция для загрузки фотографий полученных товаров
+  const handleUploadReceivedGoodsPhotos = async (invoiceId, files) => {
+    try {
+      const invoice = invoices.find(inv => inv.id === invoiceId);
+      if (!invoice) {
+        alert('Счет не найден');
+        return;
+      }
+
+      const currentPhotos = invoice.receivedGoodsPhotos || [];
+      const newPhotos = await Promise.all(
+        Array.from(files).map(async file => {
+          const data = await readFileAsDataURL(file);
+          return {
+            name: file.name,
+            size: file.size,
+            data
+          };
+        })
+      );
+
+      const updatedPhotos = [...currentPhotos, ...newPhotos];
+      await api.updateInvoice(invoiceId, { receivedGoodsPhotos: updatedPhotos });
+      await addHistory(user, 'Добавление фото товара', 'invoice', `${invoice.supplier} - добавлено ${newPhotos.length} фото`);
+      await loadData();
+    } catch (error) {
+      console.error('Ошибка загрузки фотографий:', error);
+      alert('Ошибка загрузки фотографий: ' + error.message);
+    }
+  };
+
+  // Функция для удаления фотографии
+  const handleDeleteReceivedGoodsPhoto = async (invoiceId, photoIndex) => {
+    if (!confirm('Удалить эту фотографию?')) return;
+
+    try {
+      const invoice = invoices.find(inv => inv.id === invoiceId);
+      if (!invoice) {
+        alert('Счет не найден');
+        return;
+      }
+
+      const currentPhotos = invoice.receivedGoodsPhotos || [];
+      const updatedPhotos = currentPhotos.filter((_, index) => index !== photoIndex);
+      await api.updateInvoice(invoiceId, { receivedGoodsPhotos: updatedPhotos });
+      await addHistory(user, 'Удаление фото товара', 'invoice', invoice.supplier);
+      await loadData();
+    } catch (error) {
+      alert('Ошибка удаления фотографии');
     }
   };
 
@@ -2540,6 +2837,24 @@ const LogisticsPanel = ({ user }) => {
                         >
                           Закрыть
                         </button>
+                        <div className="border-t border-gray-300 pt-2 mt-2">
+                          <h4 className="font-bold text-gray-800 mb-2 text-sm">Передать счет:</h4>
+                          <select
+                            onChange={(e) => {
+                              if (e.target.value && confirm(`Передать счет логисту ${users.find(u => u.id === e.target.value)?.name}?`)) {
+                                handleTransferInvoice(invoice.id, e.target.value);
+                                e.target.value = '';
+                              }
+                            }}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm mb-2"
+                            defaultValue=""
+                          >
+                            <option value="">Выберите логиста...</option>
+                            {users.filter(u => u.role === 'logist' && u.id !== user.id).map(logist => (
+                              <option key={logist.id} value={logist.id}>{logist.name}</option>
+                            ))}
+                          </select>
+                        </div>
                         <button
                           onClick={() => handleDeleteInvoice(invoice.id)}
                           className="w-full bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition text-sm font-medium"
@@ -2810,6 +3125,74 @@ const LogisticsPanel = ({ user }) => {
                           </div>
                         </div>
                       )}
+
+                      {/* Галерея фотографий полученных товаров */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-bold text-gray-800 flex items-center gap-2">
+                            <Camera className="w-5 h-5 text-green-600" />
+                            Фотографии полученных товаров ({invoice.receivedGoodsPhotos?.length || 0})
+                          </h4>
+                          <label className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition text-sm font-medium cursor-pointer flex items-center gap-2">
+                            <Upload className="w-4 h-4" />
+                            Загрузить фото
+                            <input
+                              type="file"
+                              multiple
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                if (e.target.files && e.target.files.length > 0) {
+                                  handleUploadReceivedGoodsPhotos(invoice.id, e.target.files);
+                                  e.target.value = '';
+                                }
+                              }}
+                            />
+                          </label>
+                        </div>
+
+                        {invoice.receivedGoodsPhotos && invoice.receivedGoodsPhotos.length > 0 ? (
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                            {invoice.receivedGoodsPhotos.map((photo, idx) => (
+                              <div key={idx} className="relative group bg-gray-50 border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition">
+                                <img
+                                  src={`${API_URL.replace('/api', '')}${photo.path}`}
+                                  alt={photo.name}
+                                  className="w-full h-48 object-cover cursor-pointer"
+                                  onClick={() => window.open(`${API_URL.replace('/api', '')}${photo.path}`, '_blank')}
+                                />
+                                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition flex items-center justify-center">
+                                  <div className="opacity-0 group-hover:opacity-100 transition flex gap-2">
+                                    <button
+                                      onClick={() => window.open(`${API_URL.replace('/api', '')}${photo.path}`, '_blank')}
+                                      className="bg-white text-gray-800 p-2 rounded-lg hover:bg-gray-100 transition"
+                                      title="Открыть в полном размере"
+                                    >
+                                      <Eye className="w-5 h-5" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteReceivedGoodsPhoto(invoice.id, idx)}
+                                      className="bg-red-600 text-white p-2 rounded-lg hover:bg-red-700 transition"
+                                      title="Удалить фото"
+                                    >
+                                      <Trash2 className="w-5 h-5" />
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="p-2 bg-white border-t border-gray-200">
+                                  <p className="text-xs text-gray-600 truncate">{photo.name}</p>
+                                  <p className="text-xs text-gray-500">{(photo.size / 1024).toFixed(1)} KB</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+                            <ImageIcon className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                            <p className="text-sm text-gray-500">Фотографий пока нет. Нажмите "Загрузить фото" чтобы добавить.</p>
+                          </div>
+                        )}
+                      </div>
 
                       <div>
                         <h4 className="font-bold text-gray-800 mb-2">Комментарии:</h4>
