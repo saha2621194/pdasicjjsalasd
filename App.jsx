@@ -1459,6 +1459,7 @@ const AdminPanel = ({ user }) => {
                 documentsSigned: logistInvoices.filter(inv => inv.status === 'documents_signed').length,
                 inTransit: logistInvoices.filter(inv => inv.status === 'in_transit').length,
                 received: logistInvoices.filter(inv => inv.status === 'received').length,
+                sold: logistInvoices.filter(inv => inv.status === 'sold').length,
                 closed: logistInvoices.filter(inv => inv.status === 'closed').length,
                 totalAmount: logistInvoices.reduce((sum, inv) => {
                   const amount = parseFloat(inv.amount.replace(/[^\d.-]/g, '')) || 0;
@@ -1474,13 +1475,14 @@ const AdminPanel = ({ user }) => {
               documentsSigned: logistsStats.reduce((sum, l) => sum + l.documentsSigned, 0),
               inTransit: logistsStats.reduce((sum, l) => sum + l.inTransit, 0),
               received: logistsStats.reduce((sum, l) => sum + l.received, 0),
+              sold: logistsStats.reduce((sum, l) => sum + l.sold, 0),
               closed: logistsStats.reduce((sum, l) => sum + l.closed, 0),
               totalAmount: logistsStats.reduce((sum, l) => sum + l.totalAmount, 0)
             };
 
             // Фильтрация всех счетов логистов по поиску
             const allLogisticsInvoices = invoices.filter(inv =>
-              inv.logistId && ['in_logistics', 'documents_signed', 'in_transit', 'received', 'closed'].includes(inv.status)
+              inv.logistId && ['in_logistics', 'documents_signed', 'in_transit', 'received', 'sold', 'closed'].includes(inv.status)
             );
 
             const filteredInvoices = allLogisticsInvoices.filter(inv => {
@@ -1505,7 +1507,7 @@ const AdminPanel = ({ user }) => {
                 {/* Общая сводка по логистам */}
                 <div className="mb-6">
                   <h3 className="text-lg font-bold text-gray-800 mb-4">Общая статистика</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
                     <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg p-4">
                       <div className="text-3xl font-bold text-blue-700">{totalLogistsStats.total}</div>
                       <div className="text-xs text-blue-600 mt-1 font-medium">Всего счетов</div>
@@ -1525,6 +1527,10 @@ const AdminPanel = ({ user }) => {
                     <div className="bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-300 rounded-lg p-4">
                       <div className="text-3xl font-bold text-green-700">{totalLogistsStats.received}</div>
                       <div className="text-xs text-green-600 mt-1 font-medium">Получено</div>
+                    </div>
+                    <div className="bg-gradient-to-br from-orange-50 to-orange-100 border-2 border-orange-300 rounded-lg p-4">
+                      <div className="text-3xl font-bold text-orange-700">{totalLogistsStats.sold}</div>
+                      <div className="text-xs text-orange-600 mt-1 font-medium">💰 Продано</div>
                     </div>
                     <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-300 rounded-lg p-4">
                       <div className="text-3xl font-bold text-gray-700">{totalLogistsStats.closed}</div>
@@ -1550,6 +1556,7 @@ const AdminPanel = ({ user }) => {
                           <th className="px-4 py-3 text-center text-sm font-bold">Док. подписаны</th>
                           <th className="px-4 py-3 text-center text-sm font-bold">Товар в пути</th>
                           <th className="px-4 py-3 text-center text-sm font-bold">Получено</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold">💰 Продано</th>
                           <th className="px-4 py-3 text-center text-sm font-bold">Закрыто</th>
                           <th className="px-4 py-3 text-right text-sm font-bold">Сумма (₽)</th>
                         </tr>
@@ -1581,6 +1588,11 @@ const AdminPanel = ({ user }) => {
                             <td className="px-4 py-3 text-center">
                               <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-green-100 text-green-700 font-bold text-sm">
                                 {logist.received}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-orange-100 text-orange-700 font-bold text-sm">
+                                {logist.sold}
                               </span>
                             </td>
                             <td className="px-4 py-3 text-center">
@@ -2057,6 +2069,22 @@ const ManagerPanel = ({ user }) => {
           <FileText className="w-5 h-5" />
           Мои счета
         </button>
+        <button
+          onClick={() => {
+            setActiveTab('sold-goods');
+            setSearchTerm('');
+            setSelectedRequest(null);
+            setSelectedInvoice(null);
+          }}
+          className={`px-6 py-3 font-bold rounded-t-lg transition-all whitespace-nowrap flex items-center gap-2 ${
+            activeTab === 'sold-goods'
+              ? 'bg-gradient-to-r from-yellow-600 to-orange-600 text-white shadow-lg'
+              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+          }`}
+        >
+          <TrendingUp className="w-5 h-5" />
+          💰 Проданные товары
+        </button>
       </div>
 
       {activeTab === 'requests' && (
@@ -2497,7 +2525,7 @@ const ManagerPanel = ({ user }) => {
 
             {(() => {
               const myInvoices = invoices.filter(inv =>
-                inv.managerId === user.id && inv.status !== 'deleted'
+                inv.managerId === user.id && inv.status !== 'deleted' && inv.status !== 'rejected'
               );
 
               const filteredInvoices = myInvoices.filter(inv => {
@@ -2659,6 +2687,164 @@ const ManagerPanel = ({ user }) => {
               }}
             />
           )}
+        </>
+      )}
+
+      {activeTab === 'sold-goods' && (
+        <>
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">💰 Проданные товары</h2>
+
+            {/* Поиск */}
+            <div className="flex gap-4 items-end mb-4">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Search className="w-4 h-4 inline mr-1" />
+                  Поиск по проданным товарам:
+                </label>
+                <input
+                  type="text"
+                  placeholder="Поставщик, номер, контакт, заявка, компания..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+            </div>
+
+            {(() => {
+              const soldInvoices = invoices.filter(inv =>
+                inv.managerId === user.id && inv.status === 'sold'
+              );
+
+              const filteredSoldInvoices = soldInvoices.filter(inv => {
+                if (!searchTerm) return true;
+                const search = searchTerm.toLowerCase();
+                const request = requests.find(r => r.id === inv.requestId);
+                const company = companies.find(c => c.id === inv.companyId);
+
+                return inv.supplier.toLowerCase().includes(search) ||
+                       inv.number.toLowerCase().includes(search) ||
+                       inv.contactPerson.toLowerCase().includes(search) ||
+                       inv.phone.toLowerCase().includes(search) ||
+                       (inv.email && inv.email.toLowerCase().includes(search)) ||
+                       (inv.website && inv.website.toLowerCase().includes(search)) ||
+                       (company && company.name.toLowerCase().includes(search)) ||
+                       (request && request.title.toLowerCase().includes(search));
+              });
+
+              return (
+                <div className="space-y-4">
+                  {filteredSoldInvoices.length === 0 ? (
+                    <div className="bg-gradient-to-br from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-lg p-8 text-center">
+                      <TrendingUp className="w-16 h-16 text-yellow-600 mx-auto mb-4" />
+                      <p className="text-xl font-bold text-gray-800">{searchTerm ? 'Нет проданных товаров, соответствующих запросу' : 'У вас пока нет проданных товаров'}</p>
+                      <p className="text-gray-600 mt-2">Как только логист отметит товар как "Продан", он появится здесь</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="bg-gradient-to-r from-yellow-600 to-orange-600 text-white rounded-lg p-6 mb-6">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="text-3xl font-bold">{filteredSoldInvoices.length}</h3>
+                            <p className="text-yellow-100">Товаров продано</p>
+                          </div>
+                          <div>
+                            <h3 className="text-3xl font-bold">{filteredSoldInvoices.reduce((sum, inv) => sum + parseFloat(inv.amount || 0), 0).toLocaleString('ru-RU')} ₽</h3>
+                            <p className="text-yellow-100">Общая сумма</p>
+                          </div>
+                        </div>
+                      </div>
+                      {filteredSoldInvoices.map(invoice => {
+                        const request = requests.find(r => r.id === invoice.requestId);
+                        const company = companies.find(c => c.id === invoice.companyId);
+                        const logist = users.find(u => u.id === invoice.logistId);
+                        const isExpanded = selectedInvoice === invoice.id;
+
+                        return (
+                          <div key={invoice.id} className="bg-white border-2 border-yellow-300 rounded-lg p-4 hover:shadow-md transition">
+                            <div className="flex justify-between items-start mb-3">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-2 flex-wrap">
+                                  <h3 className="font-bold text-xl text-gray-800">{invoice.supplier}</h3>
+                                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-green-500 to-emerald-500 text-white">
+                                    💰 Продан
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-1 text-sm text-gray-600">
+                                  <p><span className="font-medium">Заявка:</span> {request?.title || 'Удалена'}</p>
+                                  <p><span className="font-medium">Компания:</span> {company?.name || 'Не указана'}</p>
+                                  <p><span className="font-medium">Логист:</span> {logist?.name || 'Не назначен'}</p>
+                                  <p><span className="font-medium">Номер счёта:</span> {invoice.number}</p>
+                                  <p><span className="font-medium">Сумма:</span> {invoice.amount} ₽</p>
+                                  <p><span className="font-medium">Контакт:</span> {invoice.contactPerson}</p>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => setSelectedInvoice(isExpanded ? null : invoice.id)}
+                                className="ml-4 text-yellow-600 hover:text-yellow-700"
+                              >
+                                {isExpanded ? <ChevronUp className="w-6 h-6" /> : <ChevronDown className="w-6 h-6" />}
+                              </button>
+                            </div>
+
+                            {isExpanded && (
+                              <div className="mt-4 pt-4 border-t border-gray-200">
+                                <div className="text-sm text-gray-600 space-y-2">
+                                  {invoice.website && (
+                                    <p><span className="font-medium">Сайт:</span> <a href={invoice.website.startsWith('http') ? invoice.website : `https://${invoice.website}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{invoice.website}</a></p>
+                                  )}
+                                  <p><span className="font-medium">Телефон:</span> {invoice.phone}</p>
+                                  {invoice.email && <p><span className="font-medium">Email:</span> {invoice.email}</p>}
+                                  <p><span className="font-medium">Дата создания:</span> {new Date(invoice.createdAt).toLocaleString('ru-RU')}</p>
+                                  {invoice.sentToLogisticsAt && (
+                                    <p><span className="font-medium">Передан в логистику:</span> {new Date(invoice.sentToLogisticsAt).toLocaleString('ru-RU')}</p>
+                                  )}
+                                </div>
+
+                                {invoice.logisticsComment && (
+                                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-4">
+                                    <h4 className="font-bold text-gray-800 mb-1">Комментарий:</h4>
+                                    <p className="text-sm text-gray-700">{invoice.logisticsComment}</p>
+                                  </div>
+                                )}
+
+                                {invoice.files && invoice.files.length > 0 && (
+                                  <div className="mt-4">
+                                    <h4 className="font-bold text-gray-800 mb-2">Прикреплённые файлы:</h4>
+                                    <div className="space-y-2">
+                                      {invoice.files.map((file, idx) => (
+                                        <div key={idx} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-3">
+                                          <div className="flex items-center gap-2">
+                                            <FileText className="w-5 h-5 text-gray-600" />
+                                            <span className="text-sm font-medium text-gray-700">{file.name}</span>
+                                          </div>
+                                          <a
+                                            href={`${API_URL.replace('/api', '')}${file.path}`}
+                                            download={file.name}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
+                                          >
+                                            <Download className="w-4 h-4" />
+                                            Скачать
+                                          </a>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
         </>
       )}
     </div>
@@ -2909,8 +3095,12 @@ const LogisticsPanel = ({ user }) => {
     inv.logistId === user.id && ['in_logistics', 'documents_signed', 'in_transit'].includes(inv.status)
   );
 
-  const receivedInvoices = invoices.filter(inv => 
-    inv.logistId === user.id && ['received', 'closed'].includes(inv.status)
+  const receivedInvoices = invoices.filter(inv =>
+    inv.logistId === user.id && ['received', 'closed', 'sold'].includes(inv.status)
+  );
+
+  const soldInvoices = invoices.filter(inv =>
+    inv.logistId === user.id && inv.status === 'sold'
   );
 
   const filteredInvoices = myInvoices
@@ -3486,9 +3676,13 @@ const LogisticsPanel = ({ user }) => {
                       <div className="flex items-center gap-3 mb-2 flex-wrap">
                         <h3 className="font-bold text-xl text-gray-800">{invoice.supplier}</h3>
                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          invoice.status === 'received' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-700'
+                          invoice.status === 'received' ? 'bg-green-100 text-green-700' :
+                          invoice.status === 'sold' ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white' :
+                          'bg-gray-200 text-gray-700'
                         }`}>
-                          {invoice.status === 'received' ? 'Товар получен' : 'Закрыто'}
+                          {invoice.status === 'received' ? 'Товар получен' :
+                           invoice.status === 'sold' ? '💰 Продан' :
+                           'Закрыто'}
                         </span>
                       </div>
                       
@@ -3542,6 +3736,12 @@ const LogisticsPanel = ({ user }) => {
                           <div className="space-y-2">
                             {invoice.status === 'received' && (
                               <>
+                                <button
+                                  onClick={() => handleStatusChange(invoice.id, 'sold')}
+                                  className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white px-4 py-2 rounded-lg hover:from-green-700 hover:to-emerald-700 transition text-sm font-medium shadow-md"
+                                >
+                                  💰 Продан
+                                </button>
                                 <button
                                   onClick={() => handleStatusChange(invoice.id, 'closed')}
                                   className="w-full bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition text-sm font-medium"
