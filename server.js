@@ -117,6 +117,20 @@ db.exec(`
   );
 `);
 
+// Миграция: добавление колонки receivedGoodsPhotos если её нет
+try {
+  const tableInfo = db.prepare("PRAGMA table_info(invoices)").all();
+  const hasReceivedGoodsPhotos = tableInfo.some(col => col.name === 'receivedGoodsPhotos');
+
+  if (!hasReceivedGoodsPhotos) {
+    console.log('Adding receivedGoodsPhotos column to invoices table...');
+    db.exec('ALTER TABLE invoices ADD COLUMN receivedGoodsPhotos TEXT');
+    console.log('Migration completed successfully');
+  }
+} catch (error) {
+  console.error('Migration error:', error);
+}
+
 // Создание индексов для быстрого поиска
 db.exec(`
   CREATE INDEX IF NOT EXISTS idx_requests_companyId ON requests(companyId);
