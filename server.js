@@ -124,6 +124,23 @@ db.exec(`
     entity TEXT NOT NULL,
     details TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS expense_categories (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    createdBy TEXT NOT NULL,
+    createdAt TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS expenses (
+    id TEXT PRIMARY KEY,
+    categoryId TEXT NOT NULL,
+    amount REAL NOT NULL,
+    description TEXT,
+    invoiceIds TEXT NOT NULL,
+    createdBy TEXT NOT NULL,
+    createdAt TEXT NOT NULL
+  );
 `);
 
 // Миграция: добавление колонки receivedGoodsPhotos если её нет
@@ -207,7 +224,16 @@ const statements = {
   deleteLogistTag: db.prepare('DELETE FROM logist_tags WHERE id = ?'),
 
   getRecentHistory: db.prepare('SELECT * FROM history ORDER BY date DESC LIMIT 100'),
-  insertHistory: db.prepare('INSERT INTO history (id, date, user, action, entity, details) VALUES (?, ?, ?, ?, ?, ?)')
+  insertHistory: db.prepare('INSERT INTO history (id, date, user, action, entity, details) VALUES (?, ?, ?, ?, ?, ?)'),
+
+  getAllExpenseCategories: db.prepare('SELECT * FROM expense_categories ORDER BY name'),
+  insertExpenseCategory: db.prepare('INSERT INTO expense_categories (id, name, createdBy, createdAt) VALUES (?, ?, ?, ?)'),
+  deleteExpenseCategory: db.prepare('DELETE FROM expense_categories WHERE id = ?'),
+
+  getAllExpenses: db.prepare('SELECT * FROM expenses ORDER BY createdAt DESC'),
+  insertExpense: db.prepare('INSERT INTO expenses (id, categoryId, amount, description, invoiceIds, createdBy, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)'),
+  updateExpense: db.prepare('UPDATE expenses SET categoryId = ?, amount = ?, description = ?, invoiceIds = ? WHERE id = ?'),
+  deleteExpense: db.prepare('DELETE FROM expenses WHERE id = ?')
 };
 
 // Инициализация данных по умолчанию
@@ -647,6 +673,97 @@ app.post('/api/logist-tags', (req, res) => {
 app.delete('/api/logist-tags/:id', (req, res) => {
   try {
     statements.deleteLogistTag.run(req.params.id);
+    updateTimestamp();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Expense Categories
+app.get('/api/expense-categories', (req, res) => {
+  try {
+    const categories = statements.getAllExpenseCategories.all();
+    res.json(categories);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/expense-categories', (req, res) => {
+  const { id, name, createdBy, createdAt } = req.body;
+  try {
+    statements.insertExpenseCategory.run(id, name, createdBy, createdAt);
+    updateTimestamp();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/expense-categories/:id', (req, res) => {
+  try {
+    statements.deleteExpenseCategory.run(req.params.id);
+    updateTimestamp();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Expenses
+app.get('/api/expenses', (req, res) => {
+  try {
+    const expenses = statements.getAllExpenses.all();
+    const parsedExpenses = expenses.map(exp => ({
+      ...exp,
+      invoiceIds: exp.invoiceIds ? JSON.parse(exp.invoiceIds) : []
+    }));
+    res.json(parsedExpenses);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/expenses', (req, res) => {
+  const { id, categoryId, amount, description, invoiceIds, createdBy, createdAt } = req.body;
+  try {
+    statements.insertExpense.run(
+      id,
+      categoryId,
+      amount,
+      description || '',
+      JSON.stringify(invoiceIds),
+      createdBy,
+      createdAt
+    );
+    updateTimestamp();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/expenses/:id', (req, res) => {
+  const { categoryId, amount, description, invoiceIds } = req.body;
+  try {
+    statements.updateExpense.run(
+      categoryId,
+      amount,
+      description || '',
+      JSON.stringify(invoiceIds),
+      req.params.id
+    );
+    updateTimestamp();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/expenses/:id', (req, res) => {
+  try {
+    statements.deleteExpense.run(req.params.id);
     updateTimestamp();
     res.json({ success: true });
   } catch (error) {

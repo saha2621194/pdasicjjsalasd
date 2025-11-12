@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Plus, Edit2, Trash2, Eye, Upload, Download, MessageSquare, Clock, Building, Package, FileText, Users, LogOut, ChevronDown, ChevronUp, Filter, Search, TrendingUp, BarChart3, Calendar, XCircle, Camera, Image as ImageIcon } from 'lucide-react';
+import { X, Plus, Edit2, Trash2, Eye, Upload, Download, MessageSquare, Clock, Building, Package, FileText, Users, LogOut, ChevronDown, ChevronUp, Filter, Search, TrendingUp, BarChart3, Calendar, XCircle, Camera, Image as ImageIcon, DollarSign, Receipt, Tag, Split } from 'lucide-react';
 
 const API_URL = 'http://85.209.154.11:3001/api';
 
@@ -86,7 +86,28 @@ const api = {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
   }).then(r => r.json()),
-  
+
+  getExpenseCategories: () => fetch(`${API_URL}/expense-categories`).then(r => r.json()),
+  createExpenseCategory: (data) => fetch(`${API_URL}/expense-categories`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }).then(r => r.json()),
+  deleteExpenseCategory: (id) => fetch(`${API_URL}/expense-categories/${id}`, { method: 'DELETE' }).then(r => r.json()),
+
+  getExpenses: () => fetch(`${API_URL}/expenses`).then(r => r.json()),
+  createExpense: (data) => fetch(`${API_URL}/expenses`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }).then(r => r.json()),
+  updateExpense: (id, data) => fetch(`${API_URL}/expenses/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }).then(r => r.json()),
+  deleteExpense: (id) => fetch(`${API_URL}/expenses/${id}`, { method: 'DELETE' }).then(r => r.json()),
+
   login: (login, password) => fetch(`${API_URL}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2883,11 +2904,18 @@ const LogisticsPanel = ({ user }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
-  const [activeTab, setActiveTab] = useState('my-invoices'); // вкладки: my-invoices, received-goods, all-invoices
+  const [activeTab, setActiveTab] = useState('my-invoices'); // вкладки: my-invoices, received-goods, all-invoices, expenses
   const [logistTags, setLogistTags] = useState([]);
   const [showTagModal, setShowTagModal] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState('#3B82F6');
+
+  // Состояние для расходов
+  const [expenses, setExpenses] = useState([]);
+  const [expenseCategories, setExpenseCategories] = useState([]);
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [editingExpense, setEditingExpense] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -2897,13 +2925,15 @@ const LogisticsPanel = ({ user }) => {
 
   const loadData = async () => {
     try {
-      const [invoicesData, requestsData, usersData, companiesData, commentsData, tagsData] = await Promise.all([
+      const [invoicesData, requestsData, usersData, companiesData, commentsData, tagsData, expensesData, categoriesData] = await Promise.all([
         api.getInvoices(),
         api.getRequests(),
         api.getUsers(),
         api.getCompanies(),
         api.getComments(),
-        fetch(`${API_URL}/logist-tags/${user.id}`).then(r => r.json())
+        fetch(`${API_URL}/logist-tags/${user.id}`).then(r => r.json()),
+        api.getExpenses(),
+        api.getExpenseCategories()
       ]);
 
       setInvoices(invoicesData);
@@ -2912,6 +2942,8 @@ const LogisticsPanel = ({ user }) => {
       setCompanies(companiesData);
       setComments(commentsData);
       setLogistTags(tagsData);
+      setExpenses(expensesData);
+      setExpenseCategories(categoriesData);
     } catch (error) {
       console.error('Ошибка загрузки данных:', error);
     }
@@ -3290,6 +3322,17 @@ const LogisticsPanel = ({ user }) => {
         >
           <Search className="inline mr-2 w-5 h-5" />
           База всех счетов
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab('expenses');
+            setSearchTerm('');
+            setSelectedInvoice(null);
+          }}
+          className={`px-6 py-3 font-medium transition whitespace-nowrap ${activeTab === 'expenses' ? 'border-b-2 border-orange-600 text-orange-600' : 'text-gray-600 hover:text-gray-900'}`}
+        >
+          <Receipt className="inline mr-2 w-5 h-5" />
+          💰 Расходы ({expenses.length})
         </button>
       </div>
 
