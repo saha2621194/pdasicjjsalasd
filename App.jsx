@@ -3215,6 +3215,116 @@ const LogisticsPanel = ({ user }) => {
         </button>
       </div>
 
+      {/* Вкладка "Расходы" */}
+      {activeTab === 'expenses' && (
+        <div>
+          <div className="mb-6 flex gap-4">
+            <button
+              onClick={() => setShowCategoryModal(true)}
+              className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition flex items-center gap-2"
+            >
+              <Tag className="w-4 h-4" />
+              Управление категориями
+            </button>
+            <button
+              onClick={() => {
+                setEditingExpense(null);
+                setShowExpenseModal(true);
+              }}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Добавить расход
+            </button>
+          </div>
+
+          {/* Список расходов */}
+          <div className="space-y-4">
+            {expenses.length === 0 ? (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center text-gray-600">
+                <Receipt className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                <p className="text-lg font-medium mb-2">Расходов пока нет</p>
+                <p className="text-sm">Добавьте первый расход, нажав кнопку "Добавить расход"</p>
+              </div>
+            ) : (
+              expenses.map(expense => {
+                const category = expenseCategories.find(c => c.id === expense.categoryId);
+                const expenseInvoices = expense.invoiceIds.map(invId =>
+                  invoices.find(inv => inv.id === invId)
+                ).filter(Boolean);
+                const splitAmount = expenseInvoices.length > 0 ? (expense.amount / expenseInvoices.length) : expense.amount;
+
+                return (
+                  <div key={expense.id} className="bg-white border-2 border-orange-200 rounded-lg p-4 hover:shadow-md transition">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="bg-gradient-to-r from-orange-500 to-red-500 text-white px-3 py-1 rounded-full text-sm font-bold">
+                            {expense.amount.toLocaleString('ru-RU')} ₽
+                          </div>
+                          <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
+                            {category?.name || 'Без категории'}
+                          </span>
+                          {expenseInvoices.length > 1 && (
+                            <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium flex items-center gap-1">
+                              <Split className="w-4 h-4" />
+                              Разделён на {expenseInvoices.length} счёта ({splitAmount.toLocaleString('ru-RU')} ₽ каждый)
+                            </span>
+                          )}
+                        </div>
+
+                        {expense.description && (
+                          <p className="text-gray-700 mb-3">{expense.description}</p>
+                        )}
+
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium text-gray-700">Привязан к счетам:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {expenseInvoices.map(invoice => (
+                              <div key={invoice.id} className="bg-gray-100 px-3 py-1 rounded-lg text-sm">
+                                <span className="font-medium">{invoice.supplier}</span>
+                                <span className="text-gray-600"> • {invoice.number}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-gray-500 mt-3">
+                          Создан: {new Date(expense.createdAt).toLocaleString('ru-RU')}
+                        </p>
+                      </div>
+
+                      <div className="ml-4 flex flex-col gap-2">
+                        <button
+                          onClick={() => {
+                            setEditingExpense(expense);
+                            setShowExpenseModal(true);
+                          }}
+                          className="bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition text-sm"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (confirm('Удалить этот расход?')) {
+                              await api.deleteExpense(expense.id);
+                              await loadData();
+                            }
+                          }}
+                          className="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition text-sm"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Модальное окно для управления тегами */}
       {showTagModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -3284,6 +3394,218 @@ const LogisticsPanel = ({ user }) => {
                 ))
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модальное окно для управления категориями расходов */}
+      {showCategoryModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-800">Категории расходов</h3>
+              <button
+                onClick={() => setShowCategoryModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Название категории"
+                  value={newTagName}
+                  onChange={(e) => setNewTagName(e.target.value)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                />
+                <button
+                  onClick={async () => {
+                    if (!newTagName.trim()) return;
+                    await api.createExpenseCategory({
+                      id: Date.now().toString(),
+                      name: newTagName.trim(),
+                      createdBy: user.id,
+                      createdAt: new Date().toISOString()
+                    });
+                    setNewTagName('');
+                    await loadData();
+                  }}
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {expenseCategories.length === 0 ? (
+                <p className="text-gray-500 text-center py-4">Категорий пока нет</p>
+              ) : (
+                expenseCategories.map(category => (
+                  <div key={category.id} className="flex items-center justify-between bg-gray-50 px-4 py-2 rounded-lg">
+                    <span className="font-medium">{category.name}</span>
+                    <button
+                      onClick={async () => {
+                        if (confirm(`Удалить категорию "${category.name}"?`)) {
+                          await api.deleteExpenseCategory(category.id);
+                          await loadData();
+                        }
+                      }}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модальное окно для добавления/редактирования расхода */}
+      {showExpenseModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-800">
+                {editingExpense ? 'Редактировать расход' : 'Новый расход'}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowExpenseModal(false);
+                  setEditingExpense(null);
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const selectedInvoiceIds = Array.from(formData.getAll('invoiceIds'));
+
+                if (selectedInvoiceIds.length === 0) {
+                  alert('Выберите хотя бы один счёт');
+                  return;
+                }
+
+                const expenseData = {
+                  categoryId: formData.get('categoryId'),
+                  amount: parseFloat(formData.get('amount')),
+                  description: formData.get('description'),
+                  invoiceIds: selectedInvoiceIds
+                };
+
+                if (editingExpense) {
+                  await api.updateExpense(editingExpense.id, expenseData);
+                } else {
+                  await api.createExpense({
+                    id: Date.now().toString(),
+                    ...expenseData,
+                    createdBy: user.id,
+                    createdAt: new Date().toISOString()
+                  });
+                }
+
+                await loadData();
+                setShowExpenseModal(false);
+                setEditingExpense(null);
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Категория *</label>
+                <select
+                  name="categoryId"
+                  required
+                  defaultValue={editingExpense?.categoryId || ''}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="">Выберите категорию</option>
+                  {expenseCategories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Сумма расхода * (₽)</label>
+                <input
+                  type="number"
+                  name="amount"
+                  required
+                  step="0.01"
+                  min="0"
+                  defaultValue={editingExpense?.amount || ''}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  placeholder="Введите сумму"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Описание</label>
+                <textarea
+                  name="description"
+                  rows="3"
+                  defaultValue={editingExpense?.description || ''}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  placeholder="Опишите расход..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Привязать к счетам * (выберите один или несколько)
+                </label>
+                <div className="border border-gray-300 rounded-lg p-4 max-h-60 overflow-y-auto space-y-2">
+                  {invoices.filter(inv => inv.logistId === user.id).map(invoice => (
+                    <label key={invoice.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                      <input
+                        type="checkbox"
+                        name="invoiceIds"
+                        value={invoice.id}
+                        defaultChecked={editingExpense?.invoiceIds?.includes(invoice.id)}
+                        className="w-4 h-4 text-purple-600"
+                      />
+                      <div className="flex-1">
+                        <span className="font-medium">{invoice.supplier}</span>
+                        <span className="text-gray-600 text-sm"> • {invoice.number}</span>
+                        <span className="text-gray-500 text-sm"> • {invoice.amount} ₽</span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  💡 Если выбрать несколько счетов, расход автоматически разделится между ними поровну
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition font-medium"
+                >
+                  {editingExpense ? 'Сохранить' : 'Добавить расход'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowExpenseModal(false);
+                    setEditingExpense(null);
+                  }}
+                  className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition font-medium"
+                >
+                  Отмена
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
