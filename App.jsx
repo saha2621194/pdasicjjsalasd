@@ -416,6 +416,8 @@ const AdminPanel = ({ user }) => {
   const [requests, setRequests] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [users, setUsers] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [expenseCategories, setExpenseCategories] = useState([]);
   const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
@@ -435,16 +437,20 @@ const AdminPanel = ({ user }) => {
 
   const loadData = async () => {
     try {
-      const [companiesData, requestsData, invoicesData, usersData] = await Promise.all([
+      const [companiesData, requestsData, invoicesData, usersData, expensesData, categoriesData] = await Promise.all([
         api.getCompanies(),
         api.getRequests(),
         api.getInvoices(),
-        api.getUsers()
+        api.getUsers(),
+        api.getExpenses(),
+        api.getExpenseCategories()
       ]);
       setCompanies(companiesData);
       setRequests(requestsData);
       setInvoices(invoicesData);
       setUsers(usersData);
+      setExpenses(expensesData);
+      setExpenseCategories(categoriesData);
     } catch (error) {
       console.error('Ошибка загрузки данных:', error);
     }
@@ -839,6 +845,17 @@ const AdminPanel = ({ user }) => {
           >
             <Users className="w-5 h-5" />
             Пользователи
+          </button>
+          <button
+            onClick={() => { setActiveTab('expenses'); setSearchTerm(''); }}
+            className={`px-6 py-3 font-bold rounded-xl transition-all whitespace-nowrap flex items-center gap-2 ${
+              activeTab === 'expenses'
+                ? 'bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg transform scale-105'
+                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+            }`}
+          >
+            <Receipt className="w-5 h-5" />
+            💰 Расходы
           </button>
         </div>
       </div>
@@ -1838,6 +1855,270 @@ const AdminPanel = ({ user }) => {
           )}
         </div>
       )}
+
+      {activeTab === 'expenses' && (
+        <div>
+          {/* Общая статистика */}
+          {(() => {
+            const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+            const expenseCount = expenses.length;
+            const avgExpense = expenseCount > 0 ? totalExpenses / expenseCount : 0;
+            const expensesWithInvoices = expenses.filter(exp => exp.invoiceIds && exp.invoiceIds.length > 0);
+            const totalInvoicesWithExpenses = new Set(expensesWithInvoices.flatMap(exp => exp.invoiceIds)).size;
+
+            return (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                  {/* Общая сумма расходов */}
+                  <div className="bg-gradient-to-br from-orange-500 to-red-600 text-white rounded-2xl p-6 shadow-xl">
+                    <div className="flex items-center justify-between mb-2">
+                      <DollarSign className="w-10 h-10 opacity-80" />
+                      <span className="text-3xl font-black">{totalExpenses.toLocaleString('ru-RU')} ₽</span>
+                    </div>
+                    <p className="text-orange-100 font-bold">Общая сумма расходов</p>
+                  </div>
+
+                  {/* Количество расходов */}
+                  <div className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-2xl p-6 shadow-xl">
+                    <div className="flex items-center justify-between mb-2">
+                      <Receipt className="w-10 h-10 opacity-80" />
+                      <span className="text-3xl font-black">{expenseCount}</span>
+                    </div>
+                    <p className="text-blue-100 font-bold">Всего записей расходов</p>
+                  </div>
+
+                  {/* Средний расход */}
+                  <div className="bg-gradient-to-br from-purple-500 to-pink-600 text-white rounded-2xl p-6 shadow-xl">
+                    <div className="flex items-center justify-between mb-2">
+                      <TrendingUp className="w-10 h-10 opacity-80" />
+                      <span className="text-3xl font-black">{avgExpense.toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₽</span>
+                    </div>
+                    <p className="text-purple-100 font-bold">Средний расход</p>
+                  </div>
+
+                  {/* Счетов с расходами */}
+                  <div className="bg-gradient-to-br from-green-500 to-emerald-600 text-white rounded-2xl p-6 shadow-xl">
+                    <div className="flex items-center justify-between mb-2">
+                      <FileText className="w-10 h-10 opacity-80" />
+                      <span className="text-3xl font-black">{totalInvoicesWithExpenses}</span>
+                    </div>
+                    <p className="text-green-100 font-bold">Счетов с расходами</p>
+                  </div>
+                </div>
+
+                {/* Разбивка по категориям */}
+                <div className="bg-white border-2 border-orange-200 rounded-2xl p-6 mb-8 shadow-lg">
+                  <h3 className="text-2xl font-black text-gray-800 mb-6 flex items-center gap-2">
+                    <Tag className="w-7 h-7 text-orange-600" />
+                    Расходы по категориям
+                  </h3>
+                  <div className="space-y-4">
+                    {expenseCategories.map(category => {
+                      const categoryExpenses = expenses.filter(exp => exp.categoryId === category.id);
+                      const categoryTotal = categoryExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+                      const categoryCount = categoryExpenses.length;
+                      const percentage = totalExpenses > 0 ? (categoryTotal / totalExpenses * 100) : 0;
+
+                      if (categoryCount === 0) return null;
+
+                      return (
+                        <div key={category.id} className="border-2 border-gray-200 rounded-xl p-4 hover:border-orange-300 transition">
+                          <div className="flex justify-between items-center mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm font-bold">
+                                {category.name}
+                              </span>
+                              <span className="text-gray-500 text-sm">
+                                {categoryCount} {categoryCount === 1 ? 'расход' : categoryCount < 5 ? 'расхода' : 'расходов'}
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-2xl font-black text-orange-600">{categoryTotal.toLocaleString('ru-RU')} ₽</p>
+                              <p className="text-sm text-gray-500">{percentage.toFixed(1)}% от общих расходов</p>
+                            </div>
+                          </div>
+                          {/* Прогресс-бар */}
+                          <div className="w-full bg-gray-200 rounded-full h-3 mt-3">
+                            <div
+                              className="bg-gradient-to-r from-orange-500 to-red-600 h-3 rounded-full transition-all duration-500"
+                              style={{ width: `${Math.min(percentage, 100)}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {expenseCategories.filter(cat => expenses.some(exp => exp.categoryId === cat.id)).length === 0 && (
+                      <div className="text-center py-8 text-gray-500">
+                        <Tag className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                        <p className="font-bold">Расходов по категориям пока нет</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Разбивка по логистам */}
+                <div className="bg-white border-2 border-blue-200 rounded-2xl p-6 mb-8 shadow-lg">
+                  <h3 className="text-2xl font-black text-gray-800 mb-6 flex items-center gap-2">
+                    <Users className="w-7 h-7 text-blue-600" />
+                    Расходы по логистам
+                  </h3>
+                  <div className="space-y-4">
+                    {users.filter(u => u.role === 'logistics').map(logist => {
+                      const logistExpenses = expenses.filter(exp => exp.createdBy === logist.id);
+                      const logistTotal = logistExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+                      const logistCount = logistExpenses.length;
+                      const percentage = totalExpenses > 0 ? (logistTotal / totalExpenses * 100) : 0;
+
+                      if (logistCount === 0) return null;
+
+                      return (
+                        <div key={logist.id} className="border-2 border-gray-200 rounded-xl p-4 hover:border-blue-300 transition">
+                          <div className="flex justify-between items-center mb-2">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-500 rounded-lg">
+                                <Users className="w-5 h-5 text-white" />
+                              </div>
+                              <div>
+                                <p className="font-black text-lg text-gray-800">{logist.name}</p>
+                                <p className="text-sm text-gray-500">
+                                  {logistCount} {logistCount === 1 ? 'расход' : logistCount < 5 ? 'расхода' : 'расходов'}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-2xl font-black text-blue-600">{logistTotal.toLocaleString('ru-RU')} ₽</p>
+                              <p className="text-sm text-gray-500">{percentage.toFixed(1)}% от общих расходов</p>
+                            </div>
+                          </div>
+                          {/* Прогресс-бар */}
+                          <div className="w-full bg-gray-200 rounded-full h-3 mt-3">
+                            <div
+                              className="bg-gradient-to-r from-blue-500 to-indigo-600 h-3 rounded-full transition-all duration-500"
+                              style={{ width: `${Math.min(percentage, 100)}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {users.filter(u => u.role === 'logistics' && expenses.some(exp => exp.createdBy === u.id)).length === 0 && (
+                      <div className="text-center py-8 text-gray-500">
+                        <Users className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                        <p className="font-bold">Расходов от логистов пока нет</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Детальный список всех расходов */}
+                <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-lg">
+                  <h3 className="text-2xl font-black text-gray-800 mb-6 flex items-center gap-2">
+                    <Receipt className="w-7 h-7 text-gray-600" />
+                    Все расходы (детально)
+                  </h3>
+                  {expenses.length === 0 ? (
+                    <div className="text-center py-12 text-gray-500">
+                      <Receipt className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                      <p className="text-xl font-bold">Расходов пока нет</p>
+                      <p className="mt-2">Логисты еще не добавили расходы</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {expenses.map(expense => {
+                        const category = expenseCategories.find(c => c.id === expense.categoryId);
+                        const logist = users.find(u => u.id === expense.createdBy);
+                        const expenseInvoices = expense.invoiceIds ? expense.invoiceIds.map(invId =>
+                          invoices.find(inv => inv.id === invId)
+                        ).filter(Boolean) : [];
+                        const splitAmount = expenseInvoices.length > 0 ? (expense.amount / expenseInvoices.length) : expense.amount;
+                        const date = new Date(expense.createdAt);
+
+                        return (
+                          <div key={expense.id} className="border-2 border-gray-200 rounded-xl p-5 hover:border-orange-300 transition hover:shadow-lg">
+                            <div className="flex justify-between items-start mb-3">
+                              <div className="flex items-center gap-3">
+                                <div className="p-3 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl text-white">
+                                  <DollarSign className="w-6 h-6" />
+                                </div>
+                                <div>
+                                  <p className="text-2xl font-black text-orange-600">{expense.amount.toLocaleString('ru-RU')} ₽</p>
+                                  {category && (
+                                    <span className="inline-block px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm font-bold mt-1">
+                                      <Tag className="inline w-3 h-3 mr-1" />
+                                      {category.name}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="text-right text-sm text-gray-500">
+                                <p className="font-bold">{date.toLocaleDateString('ru-RU')}</p>
+                                <p>{date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</p>
+                              </div>
+                            </div>
+
+                            {/* Описание */}
+                            {expense.description && (
+                              <div className="mb-3 p-3 bg-gray-50 rounded-lg">
+                                <p className="text-sm text-gray-700">{expense.description}</p>
+                              </div>
+                            )}
+
+                            {/* Логист */}
+                            {logist && (
+                              <div className="mb-3 flex items-center gap-2">
+                                <div className="p-1 bg-green-100 rounded">
+                                  <Users className="w-4 h-4 text-green-600" />
+                                </div>
+                                <span className="text-sm font-bold text-gray-700">Логист: {logist.name}</span>
+                              </div>
+                            )}
+
+                            {/* Индикатор разделения */}
+                            {expenseInvoices.length > 1 && (
+                              <div className="mb-3">
+                                <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-bold flex items-center gap-1 inline-flex">
+                                  <Split className="w-4 h-4" />
+                                  Разделён на {expenseInvoices.length} счёта ({splitAmount.toLocaleString('ru-RU')} ₽ каждый)
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Привязанные счета */}
+                            {expenseInvoices.length > 0 && (
+                              <div>
+                                <p className="text-sm font-bold text-gray-600 mb-2">
+                                  Привязанные счета ({expenseInvoices.length}):
+                                </p>
+                                <div className="space-y-2">
+                                  {expenseInvoices.map(invoice => (
+                                    <div key={invoice.id} className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg text-sm">
+                                      <FileText className="w-4 h-4 text-blue-600" />
+                                      <span className="font-bold text-blue-900">{invoice.supplier}</span>
+                                      <span className="text-gray-500">•</span>
+                                      <span className="text-gray-700">Счёт #{invoice.number}</span>
+                                      <span className="text-gray-500">•</span>
+                                      <span className="font-bold text-blue-600">{invoice.amount.toLocaleString('ru-RU')} ₽</span>
+                                      {expenseInvoices.length > 1 && (
+                                        <>
+                                          <span className="text-gray-500">•</span>
+                                          <span className="text-orange-600 font-bold">расход: {splitAmount.toLocaleString('ru-RU')} ₽</span>
+                                        </>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      )}
     </div>
   );
 };
@@ -1857,6 +2138,8 @@ const ManagerPanel = ({ user }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const selectedRequestRef = useRef(null);
+  const [expenses, setExpenses] = useState([]);
+  const [expenseCategories, setExpenseCategories] = useState([]);
 
   useEffect(() => {
     loadData();
@@ -1880,17 +2163,21 @@ const ManagerPanel = ({ user }) => {
 
   const loadData = async () => {
     try {
-      const [companiesData, requestsData, invoicesData, usersData] = await Promise.all([
+      const [companiesData, requestsData, invoicesData, usersData, expensesData, categoriesData] = await Promise.all([
         api.getCompanies(),
         api.getRequests(),
         api.getInvoices(),
-        api.getUsers()
+        api.getUsers(),
+        api.getExpenses(),
+        api.getExpenseCategories()
       ]);
-      
+
       setCompanies(companiesData);
       setRequests(requestsData);
       setInvoices(invoicesData);
       setUsers(usersData);
+      setExpenses(expensesData);
+      setExpenseCategories(categoriesData);
       
       if (companiesData.length > 0) {
         const savedCompany = localStorage.getItem('selectedCompany');
@@ -2701,6 +2988,82 @@ const ManagerPanel = ({ user }) => {
                                   </div>
                                 </div>
                               )}
+
+                              {/* Расходы по счёту */}
+                              {(() => {
+                                const invoiceExpenses = expenses.filter(exp =>
+                                  exp.invoiceIds && exp.invoiceIds.includes(invoice.id)
+                                );
+                                const totalExpenses = invoiceExpenses.reduce((sum, exp) => {
+                                  const splitAmount = exp.invoiceIds.length > 0 ? (exp.amount / exp.invoiceIds.length) : exp.amount;
+                                  return sum + splitAmount;
+                                }, 0);
+
+                                if (invoiceExpenses.length === 0) return null;
+
+                                return (
+                                  <div>
+                                    <div className="flex items-center justify-between mb-3">
+                                      <h4 className="font-bold text-gray-800 flex items-center gap-2">
+                                        <Receipt className="w-5 h-5 text-orange-600" />
+                                        Расходы по этому счёту
+                                      </h4>
+                                      <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-full text-sm font-bold">
+                                        {totalExpenses.toLocaleString('ru-RU')} ₽
+                                      </span>
+                                    </div>
+                                    <div className="space-y-3">
+                                      {invoiceExpenses.map(expense => {
+                                        const category = expenseCategories.find(c => c.id === expense.categoryId);
+                                        const splitAmount = expense.invoiceIds.length > 0 ? (expense.amount / expense.invoiceIds.length) : expense.amount;
+                                        const isShared = expense.invoiceIds.length > 1;
+                                        const logist = users.find(u => u.id === expense.createdBy);
+
+                                        return (
+                                          <div key={expense.id} className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                                            <div className="flex justify-between items-start mb-2">
+                                              <div>
+                                                <p className="text-lg font-bold text-orange-600">
+                                                  {splitAmount.toLocaleString('ru-RU')} ₽
+                                                  {isShared && (
+                                                    <span className="ml-2 text-xs text-blue-600">
+                                                      (из {expense.amount.toLocaleString('ru-RU')} ₽)
+                                                    </span>
+                                                  )}
+                                                </p>
+                                                <div className="flex gap-2 mt-1">
+                                                  {category && (
+                                                    <span className="inline-block px-2 py-1 bg-orange-200 text-orange-800 rounded text-xs font-medium">
+                                                      {category.name}
+                                                    </span>
+                                                  )}
+                                                  {logist && (
+                                                    <span className="inline-block px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">
+                                                      {logist.name}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              </div>
+                                              {isShared && (
+                                                <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium flex items-center gap-1">
+                                                  <Split className="w-3 h-3" />
+                                                  Разделён на {expense.invoiceIds.length}
+                                                </span>
+                                              )}
+                                            </div>
+                                            {expense.description && (
+                                              <p className="text-sm text-gray-700 mb-2">{expense.description}</p>
+                                            )}
+                                            <p className="text-xs text-gray-500">
+                                              Добавлено: {new Date(expense.createdAt).toLocaleDateString('ru-RU')} в {new Date(expense.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                                            </p>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           )}
                         </div>
@@ -3923,6 +4286,74 @@ const LogisticsPanel = ({ user }) => {
                     )}
                   </div>
 
+                  {/* Расходы по счёту */}
+                  {(() => {
+                    const invoiceExpenses = expenses.filter(exp =>
+                      exp.invoiceIds && exp.invoiceIds.includes(invoice.id)
+                    );
+                    const totalExpenses = invoiceExpenses.reduce((sum, exp) => {
+                      const splitAmount = exp.invoiceIds.length > 0 ? (exp.amount / exp.invoiceIds.length) : exp.amount;
+                      return sum + splitAmount;
+                    }, 0);
+
+                    if (invoiceExpenses.length === 0) return null;
+
+                    return (
+                      <div className="border-t border-gray-200 pt-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="font-bold text-gray-800 flex items-center gap-2">
+                            <Receipt className="w-5 h-5 text-orange-600" />
+                            Расходы по этому счёту
+                          </h4>
+                          <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-full text-sm font-bold">
+                            {totalExpenses.toLocaleString('ru-RU')} ₽
+                          </span>
+                        </div>
+                        <div className="space-y-3">
+                          {invoiceExpenses.map(expense => {
+                            const category = expenseCategories.find(c => c.id === expense.categoryId);
+                            const splitAmount = expense.invoiceIds.length > 0 ? (expense.amount / expense.invoiceIds.length) : expense.amount;
+                            const isShared = expense.invoiceIds.length > 1;
+
+                            return (
+                              <div key={expense.id} className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                                <div className="flex justify-between items-start mb-2">
+                                  <div>
+                                    <p className="text-lg font-bold text-orange-600">
+                                      {splitAmount.toLocaleString('ru-RU')} ₽
+                                      {isShared && (
+                                        <span className="ml-2 text-xs text-blue-600">
+                                          (из {expense.amount.toLocaleString('ru-RU')} ₽)
+                                        </span>
+                                      )}
+                                    </p>
+                                    {category && (
+                                      <span className="inline-block px-2 py-1 bg-orange-200 text-orange-800 rounded text-xs font-medium mt-1">
+                                        {category.name}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {isShared && (
+                                    <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium flex items-center gap-1">
+                                      <Split className="w-3 h-3" />
+                                      Разделён на {expense.invoiceIds.length}
+                                    </span>
+                                  )}
+                                </div>
+                                {expense.description && (
+                                  <p className="text-sm text-gray-700 mb-2">{expense.description}</p>
+                                )}
+                                <p className="text-xs text-gray-500">
+                                  Добавлено: {new Date(expense.createdAt).toLocaleDateString('ru-RU')} в {new Date(expense.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {invoice.logisticsComment && (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                       <h4 className="font-bold text-gray-800 mb-1">Комментарий от менеджера:</h4>
@@ -4193,6 +4624,74 @@ const LogisticsPanel = ({ user }) => {
                           </div>
                         </div>
                       )}
+
+                      {/* Расходы по счёту */}
+                      {(() => {
+                        const invoiceExpenses = expenses.filter(exp =>
+                          exp.invoiceIds && exp.invoiceIds.includes(invoice.id)
+                        );
+                        const totalExpenses = invoiceExpenses.reduce((sum, exp) => {
+                          const splitAmount = exp.invoiceIds.length > 0 ? (exp.amount / exp.invoiceIds.length) : exp.amount;
+                          return sum + splitAmount;
+                        }, 0);
+
+                        if (invoiceExpenses.length === 0) return null;
+
+                        return (
+                          <div>
+                            <div className="flex items-center justify-between mb-3">
+                              <h4 className="font-bold text-gray-800 flex items-center gap-2">
+                                <Receipt className="w-5 h-5 text-orange-600" />
+                                Расходы по этому счёту
+                              </h4>
+                              <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-full text-sm font-bold">
+                                {totalExpenses.toLocaleString('ru-RU')} ₽
+                              </span>
+                            </div>
+                            <div className="space-y-3">
+                              {invoiceExpenses.map(expense => {
+                                const category = expenseCategories.find(c => c.id === expense.categoryId);
+                                const splitAmount = expense.invoiceIds.length > 0 ? (expense.amount / expense.invoiceIds.length) : expense.amount;
+                                const isShared = expense.invoiceIds.length > 1;
+
+                                return (
+                                  <div key={expense.id} className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                                    <div className="flex justify-between items-start mb-2">
+                                      <div>
+                                        <p className="text-lg font-bold text-orange-600">
+                                          {splitAmount.toLocaleString('ru-RU')} ₽
+                                          {isShared && (
+                                            <span className="ml-2 text-xs text-blue-600">
+                                              (из {expense.amount.toLocaleString('ru-RU')} ₽)
+                                            </span>
+                                          )}
+                                        </p>
+                                        {category && (
+                                          <span className="inline-block px-2 py-1 bg-orange-200 text-orange-800 rounded text-xs font-medium mt-1">
+                                            {category.name}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {isShared && (
+                                        <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium flex items-center gap-1">
+                                          <Split className="w-3 h-3" />
+                                          Разделён на {expense.invoiceIds.length}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {expense.description && (
+                                      <p className="text-sm text-gray-700 mb-2">{expense.description}</p>
+                                    )}
+                                    <p className="text-xs text-gray-500">
+                                      Добавлено: {new Date(expense.createdAt).toLocaleDateString('ru-RU')} в {new Date(expense.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {/* Галерея фотографий полученных товаров */}
                       <div>
