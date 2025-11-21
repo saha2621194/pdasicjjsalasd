@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Plus, Edit2, Trash2, Eye, Upload, Download, MessageSquare, Clock, Building, Package, FileText, Users, LogOut, ChevronDown, ChevronUp, Filter, Search, TrendingUp, BarChart3, Calendar, XCircle } from 'lucide-react';
+import { X, Plus, Edit2, Trash2, Eye, Upload, Download, MessageSquare, Clock, Building, Package, FileText, Users, LogOut, ChevronDown, ChevronUp, Filter, Search, TrendingUp, BarChart3, Calendar, XCircle, Camera, Image as ImageIcon, DollarSign, Receipt, Tag, Split } from 'lucide-react';
 
 const API_URL = 'http://85.209.154.11:3001/api';
 
@@ -86,7 +86,28 @@ const api = {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
   }).then(r => r.json()),
-  
+
+  getExpenseCategories: () => fetch(`${API_URL}/expense-categories`).then(r => r.json()),
+  createExpenseCategory: (data) => fetch(`${API_URL}/expense-categories`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }).then(r => r.json()),
+  deleteExpenseCategory: (id) => fetch(`${API_URL}/expense-categories/${id}`, { method: 'DELETE' }).then(r => r.json()),
+
+  getExpenses: () => fetch(`${API_URL}/expenses`).then(r => r.json()),
+  createExpense: (data) => fetch(`${API_URL}/expenses`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }).then(r => r.json()),
+  updateExpense: (id, data) => fetch(`${API_URL}/expenses/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }).then(r => r.json()),
+  deleteExpense: (id) => fetch(`${API_URL}/expenses/${id}`, { method: 'DELETE' }).then(r => r.json()),
+
   login: (login, password) => fetch(`${API_URL}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -395,6 +416,8 @@ const AdminPanel = ({ user }) => {
   const [requests, setRequests] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [users, setUsers] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [expenseCategories, setExpenseCategories] = useState([]);
   const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
@@ -414,16 +437,20 @@ const AdminPanel = ({ user }) => {
 
   const loadData = async () => {
     try {
-      const [companiesData, requestsData, invoicesData, usersData] = await Promise.all([
+      const [companiesData, requestsData, invoicesData, usersData, expensesData, categoriesData] = await Promise.all([
         api.getCompanies(),
         api.getRequests(),
         api.getInvoices(),
-        api.getUsers()
+        api.getUsers(),
+        api.getExpenses(),
+        api.getExpenseCategories()
       ]);
       setCompanies(companiesData);
       setRequests(requestsData);
       setInvoices(invoicesData);
       setUsers(usersData);
+      setExpenses(expensesData);
+      setExpenseCategories(categoriesData);
     } catch (error) {
       console.error('Ошибка загрузки данных:', error);
     }
@@ -556,9 +583,10 @@ const AdminPanel = ({ user }) => {
   };
 
   const getRequestStats = (requestId) => {
-    const requestInvoices = invoices.filter(inv => inv.requestId === requestId && inv.status !== 'deleted' && inv.status !== 'rejected');
+    const allRequestInvoices = invoices.filter(inv => inv.requestId === requestId && inv.status !== 'deleted');
+    const requestInvoices = allRequestInvoices.filter(inv => inv.status !== 'rejected');
     return {
-      total: requestInvoices.length,
+      total: allRequestInvoices.length, // Всего счетов включая все статусы кроме deleted
       pendingApproval: requestInvoices.filter(inv => inv.status === 'pending_approval').length,
       approved: requestInvoices.filter(inv => ['approved', 'in_logistics'].includes(inv.status)).length,
       inLogistics: requestInvoices.filter(inv => ['in_logistics', 'documents_signed', 'in_transit', 'received', 'closed'].includes(inv.status)).length
@@ -788,8 +816,8 @@ const AdminPanel = ({ user }) => {
           <button
             onClick={() => { setActiveTab('suppliers'); setSearchTerm(''); }}
             className={`px-6 py-3 font-bold rounded-xl transition-all whitespace-nowrap flex items-center gap-2 ${
-              activeTab === 'suppliers' 
-                ? 'bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg transform scale-105' 
+              activeTab === 'suppliers'
+                ? 'bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg transform scale-105'
                 : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
             }`}
           >
@@ -797,15 +825,37 @@ const AdminPanel = ({ user }) => {
             База поставщиков
           </button>
           <button
+            onClick={() => { setActiveTab('logistics'); setSearchTerm(''); }}
+            className={`px-6 py-3 font-bold rounded-xl transition-all whitespace-nowrap flex items-center gap-2 ${
+              activeTab === 'logistics'
+                ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg transform scale-105'
+                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+            }`}
+          >
+            <Package className="w-5 h-5" />
+            Логистика
+          </button>
+          <button
             onClick={() => { setActiveTab('users'); setSearchTerm(''); }}
             className={`px-6 py-3 font-bold rounded-xl transition-all whitespace-nowrap flex items-center gap-2 ${
-              activeTab === 'users' 
-                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg transform scale-105' 
+              activeTab === 'users'
+                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg transform scale-105'
                 : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
             }`}
           >
             <Users className="w-5 h-5" />
             Пользователи
+          </button>
+          <button
+            onClick={() => { setActiveTab('expenses'); setSearchTerm(''); }}
+            className={`px-6 py-3 font-bold rounded-xl transition-all whitespace-nowrap flex items-center gap-2 ${
+              activeTab === 'expenses'
+                ? 'bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg transform scale-105'
+                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+            }`}
+          >
+            <Receipt className="w-5 h-5" />
+            💰 Расходы
           </button>
         </div>
       </div>
@@ -1263,7 +1313,7 @@ const AdminPanel = ({ user }) => {
                 </div>
 
                 {/* Детализация по дням */}
-                <div>
+                <div className="mb-8">
                   <h3 className="text-lg font-bold text-gray-800 mb-4">📅 Детализация по дням</h3>
                   <div className="space-y-4">
                     {managersStats.map(manager => (
@@ -1271,7 +1321,7 @@ const AdminPanel = ({ user }) => {
                         <div className="bg-gradient-to-r from-blue-500 to-indigo-500 px-4 py-3">
                           <h4 className="font-bold text-white text-lg">{manager.name}</h4>
                         </div>
-                        
+
                         {Object.keys(manager.byDate).length > 0 ? (
                           <div className="overflow-x-auto">
                             <table className="w-full">
@@ -1408,6 +1458,293 @@ const AdminPanel = ({ user }) => {
         </div>
       )}
 
+      {activeTab === 'logistics' && (
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-6">🚚 Логистика</h2>
+
+          {/* Поиск */}
+          <div className="mb-6">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                placeholder="🔍 Поиск по счетам (поставщик, номер, контакт, менеджер, заявка)..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-500 focus:border-purple-500 transition font-medium"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {(() => {
+            const logists = users.filter(u => u.role === 'logist');
+            const logistsStats = logists.map(logist => {
+              const logistInvoices = invoices.filter(inv => inv.logistId === logist.id);
+
+              return {
+                name: logist.name,
+                id: logist.id,
+                total: logistInvoices.length,
+                inLogistics: logistInvoices.filter(inv => inv.status === 'in_logistics').length,
+                documentsSigned: logistInvoices.filter(inv => inv.status === 'documents_signed').length,
+                inTransit: logistInvoices.filter(inv => inv.status === 'in_transit').length,
+                received: logistInvoices.filter(inv => inv.status === 'received').length,
+                sold: logistInvoices.filter(inv => inv.status === 'sold').length,
+                closed: logistInvoices.filter(inv => inv.status === 'closed').length,
+                totalAmount: logistInvoices.reduce((sum, inv) => {
+                  const amount = parseFloat(inv.amount.replace(/[^\d.-]/g, '')) || 0;
+                  return sum + amount;
+                }, 0),
+                invoices: logistInvoices
+              };
+            });
+
+            const totalLogistsStats = {
+              total: logistsStats.reduce((sum, l) => sum + l.total, 0),
+              inLogistics: logistsStats.reduce((sum, l) => sum + l.inLogistics, 0),
+              documentsSigned: logistsStats.reduce((sum, l) => sum + l.documentsSigned, 0),
+              inTransit: logistsStats.reduce((sum, l) => sum + l.inTransit, 0),
+              received: logistsStats.reduce((sum, l) => sum + l.received, 0),
+              sold: logistsStats.reduce((sum, l) => sum + l.sold, 0),
+              closed: logistsStats.reduce((sum, l) => sum + l.closed, 0),
+              totalAmount: logistsStats.reduce((sum, l) => sum + l.totalAmount, 0)
+            };
+
+            // Фильтрация всех счетов логистов по поиску
+            const allLogisticsInvoices = invoices.filter(inv =>
+              inv.logistId && ['in_logistics', 'documents_signed', 'in_transit', 'received', 'sold', 'closed'].includes(inv.status)
+            );
+
+            const filteredInvoices = allLogisticsInvoices.filter(inv => {
+              if (!searchTerm) return true;
+              const search = searchTerm.toLowerCase();
+              const request = requests.find(r => r.id === inv.requestId);
+              const manager = users.find(u => u.id === inv.managerId);
+              const logist = users.find(u => u.id === inv.logistId);
+
+              return inv.supplier.toLowerCase().includes(search) ||
+                     inv.number.toLowerCase().includes(search) ||
+                     inv.contactPerson.toLowerCase().includes(search) ||
+                     inv.phone.toLowerCase().includes(search) ||
+                     (inv.email && inv.email.toLowerCase().includes(search)) ||
+                     (manager && manager.name.toLowerCase().includes(search)) ||
+                     (logist && logist.name.toLowerCase().includes(search)) ||
+                     (request && request.title.toLowerCase().includes(search));
+            });
+
+            return (
+              <>
+                {/* Общая сводка по логистам */}
+                <div className="mb-6">
+                  <h3 className="text-lg font-bold text-gray-800 mb-4">Общая статистика</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg p-4">
+                      <div className="text-3xl font-bold text-blue-700">{totalLogistsStats.total}</div>
+                      <div className="text-xs text-blue-600 mt-1 font-medium">Всего счетов</div>
+                    </div>
+                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg p-4">
+                      <div className="text-3xl font-bold text-purple-700">{totalLogistsStats.inLogistics}</div>
+                      <div className="text-xs text-purple-600 mt-1 font-medium">В логистике</div>
+                    </div>
+                    <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 border-2 border-yellow-300 rounded-lg p-4">
+                      <div className="text-3xl font-bold text-yellow-700">{totalLogistsStats.documentsSigned}</div>
+                      <div className="text-xs text-yellow-600 mt-1 font-medium">Док. подписаны</div>
+                    </div>
+                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg p-4">
+                      <div className="text-3xl font-bold text-blue-700">{totalLogistsStats.inTransit}</div>
+                      <div className="text-xs text-blue-600 mt-1 font-medium">Товар в пути</div>
+                    </div>
+                    <div className="bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-300 rounded-lg p-4">
+                      <div className="text-3xl font-bold text-green-700">{totalLogistsStats.received}</div>
+                      <div className="text-xs text-green-600 mt-1 font-medium">Получено</div>
+                    </div>
+                    <div className="bg-gradient-to-br from-orange-50 to-orange-100 border-2 border-orange-300 rounded-lg p-4">
+                      <div className="text-3xl font-bold text-orange-700">{totalLogistsStats.sold}</div>
+                      <div className="text-xs text-orange-600 mt-1 font-medium">💰 Продано</div>
+                    </div>
+                    <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-300 rounded-lg p-4">
+                      <div className="text-3xl font-bold text-gray-700">{totalLogistsStats.closed}</div>
+                      <div className="text-xs text-gray-600 mt-1 font-medium">Закрыто</div>
+                    </div>
+                    <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 border-2 border-indigo-300 rounded-lg p-4">
+                      <div className="text-2xl font-bold text-indigo-700">{totalLogistsStats.totalAmount.toLocaleString('ru-RU')}</div>
+                      <div className="text-xs text-indigo-600 mt-1 font-medium">Рублей</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Таблица по логистам */}
+                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden mb-6">
+                  <h3 className="text-lg font-bold text-gray-800 p-4 bg-gray-50 border-b border-gray-200">Статистика по логистам</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gradient-to-r from-purple-600 to-pink-600 text-white">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-sm font-bold">Логист</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold">Всего</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold">В логистике</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold">Док. подписаны</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold">Товар в пути</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold">Получено</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold">💰 Продано</th>
+                          <th className="px-4 py-3 text-center text-sm font-bold">Закрыто</th>
+                          <th className="px-4 py-3 text-right text-sm font-bold">Сумма (₽)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {logistsStats.map((logist, idx) => (
+                          <tr key={logist.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td className="px-4 py-3 text-sm font-medium text-gray-900">{logist.name}</td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-700 font-bold text-sm">
+                                {logist.total}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-purple-100 text-purple-700 font-bold text-sm">
+                                {logist.inLogistics}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-yellow-100 text-yellow-700 font-bold text-sm">
+                                {logist.documentsSigned}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-700 font-bold text-sm">
+                                {logist.inTransit}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-green-100 text-green-700 font-bold text-sm">
+                                {logist.received}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-orange-100 text-orange-700 font-bold text-sm">
+                                {logist.sold}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 text-gray-700 font-bold text-sm">
+                                {logist.closed}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right text-sm font-bold text-gray-900">
+                              {logist.totalAmount.toLocaleString('ru-RU')}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-gradient-to-r from-gray-100 to-gray-200 border-t-2 border-gray-300">
+                        <tr>
+                          <td className="px-4 py-3 text-sm font-bold text-gray-900">ИТОГО:</td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-200 text-blue-900 font-bold text-sm">
+                              {totalLogistsStats.total}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-purple-200 text-purple-900 font-bold text-sm">
+                              {totalLogistsStats.inLogistics}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-yellow-200 text-yellow-900 font-bold text-sm">
+                              {totalLogistsStats.documentsSigned}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-200 text-blue-900 font-bold text-sm">
+                              {totalLogistsStats.inTransit}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-green-200 text-green-900 font-bold text-sm">
+                              {totalLogistsStats.received}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gray-200 text-gray-900 font-bold text-sm">
+                              {totalLogistsStats.closed}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right text-sm font-bold text-gray-900">
+                            {totalLogistsStats.totalAmount.toLocaleString('ru-RU')}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Список счетов */}
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800 mb-4">
+                    Счета ({searchTerm ? `найдено ${filteredInvoices.length}` : `всего ${allLogisticsInvoices.length}`})
+                  </h3>
+
+                  {filteredInvoices.length === 0 ? (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center text-gray-600">
+                      {searchTerm ? 'Нет счетов, соответствующих запросу' : 'Нет счетов в логистике'}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {filteredInvoices.map(inv => {
+                        const request = requests.find(r => r.id === inv.requestId);
+                        const manager = users.find(u => u.id === inv.managerId);
+                        const logist = users.find(u => u.id === inv.logistId);
+
+                        return (
+                          <div key={inv.id} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition">
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <h4 className="font-bold text-gray-900">{inv.supplier}</h4>
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    inv.status === 'in_logistics' ? 'bg-purple-100 text-purple-700' :
+                                    inv.status === 'documents_signed' ? 'bg-yellow-100 text-yellow-700' :
+                                    inv.status === 'in_transit' ? 'bg-blue-100 text-blue-700' :
+                                    inv.status === 'received' ? 'bg-green-100 text-green-700' :
+                                    'bg-gray-200 text-gray-700'
+                                  }`}>
+                                    {inv.status === 'in_logistics' ? 'В логистике' :
+                                     inv.status === 'documents_signed' ? 'Док. подписаны' :
+                                     inv.status === 'in_transit' ? 'Товар в пути' :
+                                     inv.status === 'received' ? 'Получено' :
+                                     'Закрыто'}
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1 text-sm text-gray-600">
+                                  <p><span className="font-medium">Номер:</span> {inv.number}</p>
+                                  <p><span className="font-medium">Сумма:</span> {inv.amount} ₽</p>
+                                  <p><span className="font-medium">Логист:</span> {logist?.name || 'Не назначен'}</p>
+                                  <p><span className="font-medium">Менеджер:</span> {manager?.name || 'Удалён'}</p>
+                                  <p><span className="font-medium">Заявка:</span> {request?.title || 'Удалена'}</p>
+                                  <p><span className="font-medium">Контакт:</span> {inv.contactPerson}</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
       {activeTab === 'users' && (
         <div>
           <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
@@ -1518,6 +1855,270 @@ const AdminPanel = ({ user }) => {
           )}
         </div>
       )}
+
+      {activeTab === 'expenses' && (
+        <div>
+          {/* Общая статистика */}
+          {(() => {
+            const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+            const expenseCount = expenses.length;
+            const avgExpense = expenseCount > 0 ? totalExpenses / expenseCount : 0;
+            const expensesWithInvoices = expenses.filter(exp => exp.invoiceIds && exp.invoiceIds.length > 0);
+            const totalInvoicesWithExpenses = new Set(expensesWithInvoices.flatMap(exp => exp.invoiceIds)).size;
+
+            return (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                  {/* Общая сумма расходов */}
+                  <div className="bg-gradient-to-br from-orange-500 to-red-600 text-white rounded-2xl p-6 shadow-xl">
+                    <div className="flex items-center justify-between mb-2">
+                      <DollarSign className="w-10 h-10 opacity-80" />
+                      <span className="text-3xl font-black">{totalExpenses.toLocaleString('ru-RU')} ₽</span>
+                    </div>
+                    <p className="text-orange-100 font-bold">Общая сумма расходов</p>
+                  </div>
+
+                  {/* Количество расходов */}
+                  <div className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-2xl p-6 shadow-xl">
+                    <div className="flex items-center justify-between mb-2">
+                      <Receipt className="w-10 h-10 opacity-80" />
+                      <span className="text-3xl font-black">{expenseCount}</span>
+                    </div>
+                    <p className="text-blue-100 font-bold">Всего записей расходов</p>
+                  </div>
+
+                  {/* Средний расход */}
+                  <div className="bg-gradient-to-br from-purple-500 to-pink-600 text-white rounded-2xl p-6 shadow-xl">
+                    <div className="flex items-center justify-between mb-2">
+                      <TrendingUp className="w-10 h-10 opacity-80" />
+                      <span className="text-3xl font-black">{avgExpense.toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₽</span>
+                    </div>
+                    <p className="text-purple-100 font-bold">Средний расход</p>
+                  </div>
+
+                  {/* Счетов с расходами */}
+                  <div className="bg-gradient-to-br from-green-500 to-emerald-600 text-white rounded-2xl p-6 shadow-xl">
+                    <div className="flex items-center justify-between mb-2">
+                      <FileText className="w-10 h-10 opacity-80" />
+                      <span className="text-3xl font-black">{totalInvoicesWithExpenses}</span>
+                    </div>
+                    <p className="text-green-100 font-bold">Счетов с расходами</p>
+                  </div>
+                </div>
+
+                {/* Разбивка по категориям */}
+                <div className="bg-white border-2 border-orange-200 rounded-2xl p-6 mb-8 shadow-lg">
+                  <h3 className="text-2xl font-black text-gray-800 mb-6 flex items-center gap-2">
+                    <Tag className="w-7 h-7 text-orange-600" />
+                    Расходы по категориям
+                  </h3>
+                  <div className="space-y-4">
+                    {expenseCategories.map(category => {
+                      const categoryExpenses = expenses.filter(exp => exp.categoryId === category.id);
+                      const categoryTotal = categoryExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+                      const categoryCount = categoryExpenses.length;
+                      const percentage = totalExpenses > 0 ? (categoryTotal / totalExpenses * 100) : 0;
+
+                      if (categoryCount === 0) return null;
+
+                      return (
+                        <div key={category.id} className="border-2 border-gray-200 rounded-xl p-4 hover:border-orange-300 transition">
+                          <div className="flex justify-between items-center mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm font-bold">
+                                {category.name}
+                              </span>
+                              <span className="text-gray-500 text-sm">
+                                {categoryCount} {categoryCount === 1 ? 'расход' : categoryCount < 5 ? 'расхода' : 'расходов'}
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-2xl font-black text-orange-600">{categoryTotal.toLocaleString('ru-RU')} ₽</p>
+                              <p className="text-sm text-gray-500">{percentage.toFixed(1)}% от общих расходов</p>
+                            </div>
+                          </div>
+                          {/* Прогресс-бар */}
+                          <div className="w-full bg-gray-200 rounded-full h-3 mt-3">
+                            <div
+                              className="bg-gradient-to-r from-orange-500 to-red-600 h-3 rounded-full transition-all duration-500"
+                              style={{ width: `${Math.min(percentage, 100)}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {expenseCategories.filter(cat => expenses.some(exp => exp.categoryId === cat.id)).length === 0 && (
+                      <div className="text-center py-8 text-gray-500">
+                        <Tag className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                        <p className="font-bold">Расходов по категориям пока нет</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Разбивка по логистам */}
+                <div className="bg-white border-2 border-blue-200 rounded-2xl p-6 mb-8 shadow-lg">
+                  <h3 className="text-2xl font-black text-gray-800 mb-6 flex items-center gap-2">
+                    <Users className="w-7 h-7 text-blue-600" />
+                    Расходы по логистам
+                  </h3>
+                  <div className="space-y-4">
+                    {users.filter(u => u.role === 'logistics').map(logist => {
+                      const logistExpenses = expenses.filter(exp => exp.createdBy === logist.id);
+                      const logistTotal = logistExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+                      const logistCount = logistExpenses.length;
+                      const percentage = totalExpenses > 0 ? (logistTotal / totalExpenses * 100) : 0;
+
+                      if (logistCount === 0) return null;
+
+                      return (
+                        <div key={logist.id} className="border-2 border-gray-200 rounded-xl p-4 hover:border-blue-300 transition">
+                          <div className="flex justify-between items-center mb-2">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-500 rounded-lg">
+                                <Users className="w-5 h-5 text-white" />
+                              </div>
+                              <div>
+                                <p className="font-black text-lg text-gray-800">{logist.name}</p>
+                                <p className="text-sm text-gray-500">
+                                  {logistCount} {logistCount === 1 ? 'расход' : logistCount < 5 ? 'расхода' : 'расходов'}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-2xl font-black text-blue-600">{logistTotal.toLocaleString('ru-RU')} ₽</p>
+                              <p className="text-sm text-gray-500">{percentage.toFixed(1)}% от общих расходов</p>
+                            </div>
+                          </div>
+                          {/* Прогресс-бар */}
+                          <div className="w-full bg-gray-200 rounded-full h-3 mt-3">
+                            <div
+                              className="bg-gradient-to-r from-blue-500 to-indigo-600 h-3 rounded-full transition-all duration-500"
+                              style={{ width: `${Math.min(percentage, 100)}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {users.filter(u => u.role === 'logistics' && expenses.some(exp => exp.createdBy === u.id)).length === 0 && (
+                      <div className="text-center py-8 text-gray-500">
+                        <Users className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                        <p className="font-bold">Расходов от логистов пока нет</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Детальный список всех расходов */}
+                <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 shadow-lg">
+                  <h3 className="text-2xl font-black text-gray-800 mb-6 flex items-center gap-2">
+                    <Receipt className="w-7 h-7 text-gray-600" />
+                    Все расходы (детально)
+                  </h3>
+                  {expenses.length === 0 ? (
+                    <div className="text-center py-12 text-gray-500">
+                      <Receipt className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                      <p className="text-xl font-bold">Расходов пока нет</p>
+                      <p className="mt-2">Логисты еще не добавили расходы</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {expenses.map(expense => {
+                        const category = expenseCategories.find(c => c.id === expense.categoryId);
+                        const logist = users.find(u => u.id === expense.createdBy);
+                        const expenseInvoices = expense.invoiceIds ? expense.invoiceIds.map(invId =>
+                          invoices.find(inv => inv.id === invId)
+                        ).filter(Boolean) : [];
+                        const splitAmount = expenseInvoices.length > 0 ? (expense.amount / expenseInvoices.length) : expense.amount;
+                        const date = new Date(expense.createdAt);
+
+                        return (
+                          <div key={expense.id} className="border-2 border-gray-200 rounded-xl p-5 hover:border-orange-300 transition hover:shadow-lg">
+                            <div className="flex justify-between items-start mb-3">
+                              <div className="flex items-center gap-3">
+                                <div className="p-3 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl text-white">
+                                  <DollarSign className="w-6 h-6" />
+                                </div>
+                                <div>
+                                  <p className="text-2xl font-black text-orange-600">{expense.amount.toLocaleString('ru-RU')} ₽</p>
+                                  {category && (
+                                    <span className="inline-block px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm font-bold mt-1">
+                                      <Tag className="inline w-3 h-3 mr-1" />
+                                      {category.name}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="text-right text-sm text-gray-500">
+                                <p className="font-bold">{date.toLocaleDateString('ru-RU')}</p>
+                                <p>{date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</p>
+                              </div>
+                            </div>
+
+                            {/* Описание */}
+                            {expense.description && (
+                              <div className="mb-3 p-3 bg-gray-50 rounded-lg">
+                                <p className="text-sm text-gray-700">{expense.description}</p>
+                              </div>
+                            )}
+
+                            {/* Логист */}
+                            {logist && (
+                              <div className="mb-3 flex items-center gap-2">
+                                <div className="p-1 bg-green-100 rounded">
+                                  <Users className="w-4 h-4 text-green-600" />
+                                </div>
+                                <span className="text-sm font-bold text-gray-700">Логист: {logist.name}</span>
+                              </div>
+                            )}
+
+                            {/* Индикатор разделения */}
+                            {expenseInvoices.length > 1 && (
+                              <div className="mb-3">
+                                <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-bold flex items-center gap-1 inline-flex">
+                                  <Split className="w-4 h-4" />
+                                  Разделён на {expenseInvoices.length} счёта ({splitAmount.toLocaleString('ru-RU')} ₽ каждый)
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Привязанные счета */}
+                            {expenseInvoices.length > 0 && (
+                              <div>
+                                <p className="text-sm font-bold text-gray-600 mb-2">
+                                  Привязанные счета ({expenseInvoices.length}):
+                                </p>
+                                <div className="space-y-2">
+                                  {expenseInvoices.map(invoice => (
+                                    <div key={invoice.id} className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg text-sm">
+                                      <FileText className="w-4 h-4 text-blue-600" />
+                                      <span className="font-bold text-blue-900">{invoice.supplier}</span>
+                                      <span className="text-gray-500">•</span>
+                                      <span className="text-gray-700">Счёт #{invoice.number}</span>
+                                      <span className="text-gray-500">•</span>
+                                      <span className="font-bold text-blue-600">{invoice.amount.toLocaleString('ru-RU')} ₽</span>
+                                      {expenseInvoices.length > 1 && (
+                                        <>
+                                          <span className="text-gray-500">•</span>
+                                          <span className="text-orange-600 font-bold">расход: {splitAmount.toLocaleString('ru-RU')} ₽</span>
+                                        </>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      )}
     </div>
   );
 };
@@ -1532,8 +2133,13 @@ const ManagerPanel = ({ user }) => {
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [showCompanyInfo, setShowCompanyInfo] = useState(false);
   const [users, setUsers] = useState([]);
-  const [editingInvoice, setEditingInvoice] = useState(null); // ДОБАВЛЕНО
+  const [editingInvoice, setEditingInvoice] = useState(null);
+  const [activeTab, setActiveTab] = useState('requests'); // requests, my-invoices
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
   const selectedRequestRef = useRef(null);
+  const [expenses, setExpenses] = useState([]);
+  const [expenseCategories, setExpenseCategories] = useState([]);
 
   useEffect(() => {
     loadData();
@@ -1557,17 +2163,21 @@ const ManagerPanel = ({ user }) => {
 
   const loadData = async () => {
     try {
-      const [companiesData, requestsData, invoicesData, usersData] = await Promise.all([
+      const [companiesData, requestsData, invoicesData, usersData, expensesData, categoriesData] = await Promise.all([
         api.getCompanies(),
         api.getRequests(),
         api.getInvoices(),
-        api.getUsers()
+        api.getUsers(),
+        api.getExpenses(),
+        api.getExpenseCategories()
       ]);
-      
+
       setCompanies(companiesData);
       setRequests(requestsData);
       setInvoices(invoicesData);
       setUsers(usersData);
+      setExpenses(expensesData);
+      setExpenseCategories(categoriesData);
       
       if (companiesData.length > 0) {
         const savedCompany = localStorage.getItem('selectedCompany');
@@ -1735,33 +2345,87 @@ const ManagerPanel = ({ user }) => {
 
   return (
     <div className="p-6">
-      <div className="mb-6 flex gap-4 items-start">
-        <div className="flex-1">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Выберите компанию:</label>
-          <select
-            value={selectedCompany || ''}
-            onChange={(e) => {
-              setSelectedCompany(e.target.value);
-              setSelectedRequest(null);
-            }}
-            className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          >
-            {companies.map(company => (
-              <option key={company.id} value={company.id}>{company.name}</option>
-            ))}
-          </select>
-        </div>
-        
-        {selectedCompanyData && (
-          <button
-            onClick={() => setShowCompanyInfo(!showCompanyInfo)}
-            className="mt-7 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
-          >
-            <Eye className="w-5 h-5" />
-            Инфо о компании
-          </button>
-        )}
+      {/* Вкладки */}
+      <div className="mb-6 flex gap-2 border-b border-gray-200">
+        <button
+          onClick={() => {
+            setActiveTab('requests');
+            setSearchTerm('');
+            setSelectedInvoice(null);
+          }}
+          className={`px-6 py-3 font-bold rounded-t-lg transition-all whitespace-nowrap flex items-center gap-2 ${
+            activeTab === 'requests'
+              ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg'
+              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+          }`}
+        >
+          <Package className="w-5 h-5" />
+          Заявки
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab('my-invoices');
+            setSearchTerm('');
+            setSelectedRequest(null);
+          }}
+          className={`px-6 py-3 font-bold rounded-t-lg transition-all whitespace-nowrap flex items-center gap-2 ${
+            activeTab === 'my-invoices'
+              ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg'
+              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+          }`}
+        >
+          <FileText className="w-5 h-5" />
+          Мои счета
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab('sold-goods');
+            setSearchTerm('');
+            setSelectedRequest(null);
+            setSelectedInvoice(null);
+          }}
+          className={`px-6 py-3 font-bold rounded-t-lg transition-all whitespace-nowrap flex items-center gap-2 ${
+            activeTab === 'sold-goods'
+              ? 'bg-gradient-to-r from-yellow-600 to-orange-600 text-white shadow-lg'
+              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+          }`}
+        >
+          <TrendingUp className="w-5 h-5" />
+          💰 Проданные товары
+        </button>
       </div>
+
+      {activeTab === 'requests' && (
+        <>
+          <div className="mb-6 flex gap-4 items-start">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Выберите компанию:</label>
+              <select
+                value={selectedCompany || ''}
+                onChange={(e) => {
+                  setSelectedCompany(e.target.value);
+                  setSelectedRequest(null);
+                }}
+                className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                {companies.map(company => (
+                  <option key={company.id} value={company.id}>{company.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {selectedCompanyData && (
+              <button
+                onClick={() => setShowCompanyInfo(!showCompanyInfo)}
+                className="mt-7 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
+              >
+                <Eye className="w-5 h-5" />
+                Инфо о компании
+              </button>
+            )}
+          </div>
+        </>
+      )}
 
       {showCompanyInfo && selectedCompanyData && (
         <div className="mb-6 bg-white border border-blue-200 rounded-lg p-4">
@@ -1816,7 +2480,7 @@ const ManagerPanel = ({ user }) => {
         </div>
       )}
 
-      {selectedCompany && (
+      {selectedCompany && activeTab === 'requests' && (
         <>
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-800 mb-4">Доступные заявки</h2>
@@ -1942,7 +2606,8 @@ const ManagerPanel = ({ user }) => {
                 ) : (
                   getRequestInvoices(selectedRequest.id).map(invoice => {
                     const invoiceManager = users.find(u => u.id === invoice.managerId);
-                    
+                    const invoiceLogist = invoice.logistId ? users.find(u => u.id === invoice.logistId) : null;
+
                     return (
                       <div 
                         key={invoice.id} 
@@ -1998,6 +2663,12 @@ const ManagerPanel = ({ user }) => {
                               <p><span className="font-medium">Телефон:</span> {invoice.phone}</p>
                               {invoice.email && <p><span className="font-medium">Email:</span> {invoice.email}</p>}
                               <p><span className="font-medium">Менеджер:</span> {invoiceManager?.name}</p>
+                              {invoiceLogist && (
+                                <p className="flex items-center gap-2">
+                                  <span className="font-medium">Логист:</span>
+                                  <span className="text-green-600 font-semibold">🚚 {invoiceLogist.name}</span>
+                                </p>
+                              )}
                             </div>
                             {invoice.logisticsComment && (
                               <div className="bg-yellow-50 border border-yellow-200 rounded p-2 mt-2">
@@ -2028,16 +2699,26 @@ const ManagerPanel = ({ user }) => {
                           </div>
                           
                           <div className="ml-4 flex flex-col gap-2">
+                            {/* Универсальная кнопка редактирования для всех статусов */}
+                            {invoice.managerId === user.id && invoice.status !== 'deleted' && (
+                              <button
+                                onClick={() => {
+                                  setEditingInvoice(invoice);
+                                  setShowInvoiceModal(true);
+                                }}
+                                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm font-medium whitespace-nowrap"
+                              >
+                                Редактировать
+                              </button>
+                            )}
+
                             {invoice.managerId === user.id && invoice.status === 'new' && (
                               <>
                                 <button
-                                  onClick={() => {
-                                    setEditingInvoice(invoice);
-                                    setShowInvoiceModal(true);
-                                  }}
-                                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm font-medium whitespace-nowrap"
+                                  onClick={() => handlePendingApprovalInvoice(invoice.id)}
+                                  className="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 transition text-sm font-medium whitespace-nowrap"
                                 >
-                                  Редактировать
+                                  На согласовании
                                 </button>
                                 <button
                                   onClick={() => handlePendingApprovalInvoice(invoice.id)}
@@ -2065,18 +2746,9 @@ const ManagerPanel = ({ user }) => {
                                 </button>
                               </>
                             )}
-                            
+
                             {invoice.managerId === user.id && invoice.status === 'pending_approval' && (
                               <>
-                                <button
-                                  onClick={() => {
-                                    setEditingInvoice(invoice);
-                                    setShowInvoiceModal(true);
-                                  }}
-                                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm font-medium whitespace-nowrap"
-                                >
-                                  Редактировать
-                                </button>
                                 <button
                                   onClick={() => handleApproveInvoice(invoice.id)}
                                   className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition text-sm font-medium whitespace-nowrap"
@@ -2097,18 +2769,9 @@ const ManagerPanel = ({ user }) => {
                                 </button>
                               </>
                             )}
-                            
+
                             {invoice.managerId === user.id && invoice.status === 'approved' && (
                               <>
-                                <button
-                                  onClick={() => {
-                                    setEditingInvoice(invoice);
-                                    setShowInvoiceModal(true);
-                                  }}
-                                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm font-medium whitespace-nowrap"
-                                >
-                                  Редактировать
-                                </button>
                                 <button
                                   onClick={() => handleSendToLogistics(invoice.id)}
                                   className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm font-medium whitespace-nowrap"
@@ -2151,6 +2814,444 @@ const ManagerPanel = ({ user }) => {
           )}
         </>
       )}
+
+      {/* Вкладка "Мои счета" */}
+      {activeTab === 'my-invoices' && (
+        <>
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Все мои счета</h2>
+
+            {/* Поиск */}
+            <div className="flex gap-4 items-end mb-4">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Search className="w-4 h-4 inline mr-1" />
+                  Поиск по счетам:
+                </label>
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Поиск по поставщику, номеру, контакту, заявке, компании..."
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            {(() => {
+              const myInvoices = invoices.filter(inv =>
+                inv.managerId === user.id && inv.status !== 'deleted' && inv.status !== 'rejected'
+              );
+
+              const filteredInvoices = myInvoices.filter(inv => {
+                if (!searchTerm) return true;
+                const search = searchTerm.toLowerCase();
+                const request = requests.find(r => r.id === inv.requestId);
+                const company = companies.find(c => c.id === inv.companyId);
+
+                return inv.supplier.toLowerCase().includes(search) ||
+                       inv.number.toLowerCase().includes(search) ||
+                       inv.contactPerson.toLowerCase().includes(search) ||
+                       inv.phone.toLowerCase().includes(search) ||
+                       (inv.email && inv.email.toLowerCase().includes(search)) ||
+                       (inv.website && inv.website.toLowerCase().includes(search)) ||
+                       (company && company.name.toLowerCase().includes(search)) ||
+                       (request && request.title.toLowerCase().includes(search));
+              });
+
+              return (
+                <div className="space-y-4">
+                  {filteredInvoices.length === 0 ? (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center text-gray-600">
+                      {searchTerm ? 'Нет счетов, соответствующих запросу' : 'У вас пока нет счетов'}
+                    </div>
+                  ) : (
+                    filteredInvoices.map(invoice => {
+                      const request = requests.find(r => r.id === invoice.requestId);
+                      const company = companies.find(c => c.id === invoice.companyId);
+                      const invoiceLogist = invoice.logistId ? users.find(u => u.id === invoice.logistId) : null;
+                      const isExpanded = selectedInvoice === invoice.id;
+
+                      return (
+                        <div key={invoice.id} className="bg-white border-2 border-gray-200 rounded-lg p-4 hover:shadow-md transition">
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2 flex-wrap">
+                                <h3 className="font-bold text-xl text-gray-800">{invoice.supplier}</h3>
+                                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                  invoice.status === 'new' ? 'bg-gray-100 text-gray-700' :
+                                  invoice.status === 'pending_approval' ? 'bg-yellow-100 text-yellow-700' :
+                                  invoice.status === 'approved' ? 'bg-green-100 text-green-700' :
+                                  invoice.status === 'in_logistics' ? 'bg-purple-100 text-purple-700' :
+                                  invoice.status === 'documents_signed' ? 'bg-yellow-100 text-yellow-700' :
+                                  invoice.status === 'in_transit' ? 'bg-blue-100 text-blue-700' :
+                                  invoice.status === 'received' ? 'bg-green-100 text-green-700' :
+                                  invoice.status === 'closed' ? 'bg-gray-200 text-gray-700' :
+                                  'bg-red-100 text-red-700'
+                                }`}>
+                                  {invoice.status === 'new' ? 'Новый' :
+                                   invoice.status === 'pending_approval' ? 'На согласовании' :
+                                   invoice.status === 'approved' ? 'Согласовано' :
+                                   invoice.status === 'in_logistics' ? 'В логистике' :
+                                   invoice.status === 'documents_signed' ? 'Документы подписаны' :
+                                   invoice.status === 'in_transit' ? 'Товар в пути' :
+                                   invoice.status === 'received' ? 'Товар получен' :
+                                   invoice.status === 'closed' ? 'Закрыто' :
+                                   'Срез'}
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-1 text-sm text-gray-600">
+                                <p><span className="font-medium">Заявка:</span> {request?.title || 'Удалена'}</p>
+                                <p><span className="font-medium">Компания:</span> {company?.name || 'Не указана'}</p>
+                                <p><span className="font-medium">Номер счёта:</span> {invoice.number}</p>
+                                <p><span className="font-medium">Сумма:</span> {invoice.amount} ₽</p>
+                                <p><span className="font-medium">Контакт:</span> {invoice.contactPerson}</p>
+                                <p><span className="font-medium">Телефон:</span> {invoice.phone}</p>
+                                {invoiceLogist && (
+                                  <p className="flex items-center gap-2">
+                                    <span className="font-medium">Логист:</span>
+                                    <span className="text-green-600 font-semibold">🚚 {invoiceLogist.name}</span>
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={() => setSelectedInvoice(isExpanded ? null : invoice.id)}
+                              className="ml-4 text-blue-600 hover:text-blue-700"
+                            >
+                              {isExpanded ? <ChevronUp className="w-6 h-6" /> : <ChevronDown className="w-6 h-6" />}
+                            </button>
+                          </div>
+
+                          {isExpanded && (
+                            <div className="mt-4 pt-4 border-t border-gray-200 space-y-4">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                  <h4 className="font-bold text-gray-800 mb-2">Детали:</h4>
+                                  <div className="text-sm text-gray-600 space-y-1">
+                                    {invoice.website && (
+                                      <p><span className="font-medium">Сайт:</span> <a href={invoice.website.startsWith('http') ? invoice.website : `https://${invoice.website}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{invoice.website}</a></p>
+                                    )}
+                                    {invoice.email && <p><span className="font-medium">Email:</span> {invoice.email}</p>}
+                                    <p><span className="font-medium">Дата создания:</span> {new Date(invoice.createdAt).toLocaleString('ru-RU')}</p>
+                                    {invoice.sentToLogisticsAt && (
+                                      <p><span className="font-medium">Передан в логистику:</span> {new Date(invoice.sentToLogisticsAt).toLocaleString('ru-RU')}</p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-col gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setEditingInvoice(invoice);
+                                      setShowInvoiceModal(true);
+                                    }}
+                                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm font-medium"
+                                  >
+                                    Редактировать
+                                  </button>
+                                </div>
+                              </div>
+
+                              {invoice.logisticsComment && (
+                                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                                  <h4 className="font-bold text-gray-800 mb-1">Комментарий для логистики:</h4>
+                                  <p className="text-sm text-gray-700">{invoice.logisticsComment}</p>
+                                </div>
+                              )}
+
+                              {invoice.files && invoice.files.length > 0 && (
+                                <div>
+                                  <h4 className="font-bold text-gray-800 mb-2">Прикреплённые файлы:</h4>
+                                  <div className="space-y-2">
+                                    {invoice.files.map((file, idx) => (
+                                      <div key={idx} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-3">
+                                        <div className="flex items-center gap-2">
+                                          <FileText className="w-5 h-5 text-gray-600" />
+                                          <span className="text-sm font-medium text-gray-700">{file.name}</span>
+                                          <span className="text-xs text-gray-500">({(file.size / 1024).toFixed(1)} KB)</span>
+                                        </div>
+                                        <a
+                                          href={`${API_URL.replace('/api', '')}${file.path}`}
+                                          download={file.name}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
+                                        >
+                                          <Download className="w-4 h-4" />
+                                          Скачать
+                                        </a>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Расходы по счёту */}
+                              {(() => {
+                                const invoiceExpenses = expenses.filter(exp =>
+                                  exp.invoiceIds && exp.invoiceIds.includes(invoice.id)
+                                );
+                                const totalExpenses = invoiceExpenses.reduce((sum, exp) => {
+                                  const splitAmount = exp.invoiceIds.length > 0 ? (exp.amount / exp.invoiceIds.length) : exp.amount;
+                                  return sum + splitAmount;
+                                }, 0);
+
+                                if (invoiceExpenses.length === 0) return null;
+
+                                return (
+                                  <div>
+                                    <div className="flex items-center justify-between mb-3">
+                                      <h4 className="font-bold text-gray-800 flex items-center gap-2">
+                                        <Receipt className="w-5 h-5 text-orange-600" />
+                                        Расходы по этому счёту
+                                      </h4>
+                                      <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-full text-sm font-bold">
+                                        {totalExpenses.toLocaleString('ru-RU')} ₽
+                                      </span>
+                                    </div>
+                                    <div className="space-y-3">
+                                      {invoiceExpenses.map(expense => {
+                                        const category = expenseCategories.find(c => c.id === expense.categoryId);
+                                        const splitAmount = expense.invoiceIds.length > 0 ? (expense.amount / expense.invoiceIds.length) : expense.amount;
+                                        const isShared = expense.invoiceIds.length > 1;
+                                        const logist = users.find(u => u.id === expense.createdBy);
+
+                                        return (
+                                          <div key={expense.id} className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                                            <div className="flex justify-between items-start mb-2">
+                                              <div>
+                                                <p className="text-lg font-bold text-orange-600">
+                                                  {splitAmount.toLocaleString('ru-RU')} ₽
+                                                  {isShared && (
+                                                    <span className="ml-2 text-xs text-blue-600">
+                                                      (из {expense.amount.toLocaleString('ru-RU')} ₽)
+                                                    </span>
+                                                  )}
+                                                </p>
+                                                <div className="flex gap-2 mt-1">
+                                                  {category && (
+                                                    <span className="inline-block px-2 py-1 bg-orange-200 text-orange-800 rounded text-xs font-medium">
+                                                      {category.name}
+                                                    </span>
+                                                  )}
+                                                  {logist && (
+                                                    <span className="inline-block px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">
+                                                      {logist.name}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              </div>
+                                              {isShared && (
+                                                <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium flex items-center gap-1">
+                                                  <Split className="w-3 h-3" />
+                                                  Разделён на {expense.invoiceIds.length}
+                                                </span>
+                                              )}
+                                            </div>
+                                            {expense.description && (
+                                              <p className="text-sm text-gray-700 mb-2">{expense.description}</p>
+                                            )}
+                                            <p className="text-xs text-gray-500">
+                                              Добавлено: {new Date(expense.createdAt).toLocaleDateString('ru-RU')} в {new Date(expense.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                                            </p>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+
+          {showInvoiceModal && (
+            <InvoiceModal
+              invoice={editingInvoice}
+              onSave={editingInvoice ? handleEditInvoice : handleAddInvoice}
+              onClose={() => {
+                setShowInvoiceModal(false);
+                setEditingInvoice(null);
+              }}
+            />
+          )}
+        </>
+      )}
+
+      {activeTab === 'sold-goods' && (
+        <>
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">💰 Проданные товары</h2>
+
+            {/* Поиск */}
+            <div className="flex gap-4 items-end mb-4">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Search className="w-4 h-4 inline mr-1" />
+                  Поиск по проданным товарам:
+                </label>
+                <input
+                  type="text"
+                  placeholder="Поставщик, номер, контакт, заявка, компания..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+            </div>
+
+            {(() => {
+              const soldInvoices = invoices.filter(inv =>
+                inv.managerId === user.id && inv.status === 'sold'
+              );
+
+              const filteredSoldInvoices = soldInvoices.filter(inv => {
+                if (!searchTerm) return true;
+                const search = searchTerm.toLowerCase();
+                const request = requests.find(r => r.id === inv.requestId);
+                const company = companies.find(c => c.id === inv.companyId);
+
+                return inv.supplier.toLowerCase().includes(search) ||
+                       inv.number.toLowerCase().includes(search) ||
+                       inv.contactPerson.toLowerCase().includes(search) ||
+                       inv.phone.toLowerCase().includes(search) ||
+                       (inv.email && inv.email.toLowerCase().includes(search)) ||
+                       (inv.website && inv.website.toLowerCase().includes(search)) ||
+                       (company && company.name.toLowerCase().includes(search)) ||
+                       (request && request.title.toLowerCase().includes(search));
+              });
+
+              return (
+                <div className="space-y-4">
+                  {filteredSoldInvoices.length === 0 ? (
+                    <div className="bg-gradient-to-br from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-lg p-8 text-center">
+                      <TrendingUp className="w-16 h-16 text-yellow-600 mx-auto mb-4" />
+                      <p className="text-xl font-bold text-gray-800">{searchTerm ? 'Нет проданных товаров, соответствующих запросу' : 'У вас пока нет проданных товаров'}</p>
+                      <p className="text-gray-600 mt-2">Как только логист отметит товар как "Продан", он появится здесь</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="bg-gradient-to-r from-yellow-600 to-orange-600 text-white rounded-lg p-6 mb-6">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="text-3xl font-bold">{filteredSoldInvoices.length}</h3>
+                            <p className="text-yellow-100">Товаров продано</p>
+                          </div>
+                          <div>
+                            <h3 className="text-3xl font-bold">{filteredSoldInvoices.reduce((sum, inv) => sum + parseFloat(inv.amount || 0), 0).toLocaleString('ru-RU')} ₽</h3>
+                            <p className="text-yellow-100">Общая сумма</p>
+                          </div>
+                        </div>
+                      </div>
+                      {filteredSoldInvoices.map(invoice => {
+                        const request = requests.find(r => r.id === invoice.requestId);
+                        const company = companies.find(c => c.id === invoice.companyId);
+                        const logist = users.find(u => u.id === invoice.logistId);
+                        const isExpanded = selectedInvoice === invoice.id;
+
+                        return (
+                          <div key={invoice.id} className="bg-white border-2 border-yellow-300 rounded-lg p-4 hover:shadow-md transition">
+                            <div className="flex justify-between items-start mb-3">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-2 flex-wrap">
+                                  <h3 className="font-bold text-xl text-gray-800">{invoice.supplier}</h3>
+                                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-green-500 to-emerald-500 text-white">
+                                    💰 Продан
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-1 text-sm text-gray-600">
+                                  <p><span className="font-medium">Заявка:</span> {request?.title || 'Удалена'}</p>
+                                  <p><span className="font-medium">Компания:</span> {company?.name || 'Не указана'}</p>
+                                  <p className="flex items-center gap-2">
+                                    <span className="font-medium">Логист:</span>
+                                    {logist ? (
+                                      <span className="text-green-600 font-semibold">🚚 {logist.name}</span>
+                                    ) : (
+                                      <span>Не назначен</span>
+                                    )}
+                                  </p>
+                                  <p><span className="font-medium">Номер счёта:</span> {invoice.number}</p>
+                                  <p><span className="font-medium">Сумма:</span> {invoice.amount} ₽</p>
+                                  <p><span className="font-medium">Контакт:</span> {invoice.contactPerson}</p>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => setSelectedInvoice(isExpanded ? null : invoice.id)}
+                                className="ml-4 text-yellow-600 hover:text-yellow-700"
+                              >
+                                {isExpanded ? <ChevronUp className="w-6 h-6" /> : <ChevronDown className="w-6 h-6" />}
+                              </button>
+                            </div>
+
+                            {isExpanded && (
+                              <div className="mt-4 pt-4 border-t border-gray-200">
+                                <div className="text-sm text-gray-600 space-y-2">
+                                  {invoice.website && (
+                                    <p><span className="font-medium">Сайт:</span> <a href={invoice.website.startsWith('http') ? invoice.website : `https://${invoice.website}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{invoice.website}</a></p>
+                                  )}
+                                  <p><span className="font-medium">Телефон:</span> {invoice.phone}</p>
+                                  {invoice.email && <p><span className="font-medium">Email:</span> {invoice.email}</p>}
+                                  <p><span className="font-medium">Дата создания:</span> {new Date(invoice.createdAt).toLocaleString('ru-RU')}</p>
+                                  {invoice.sentToLogisticsAt && (
+                                    <p><span className="font-medium">Передан в логистику:</span> {new Date(invoice.sentToLogisticsAt).toLocaleString('ru-RU')}</p>
+                                  )}
+                                </div>
+
+                                {invoice.logisticsComment && (
+                                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-4">
+                                    <h4 className="font-bold text-gray-800 mb-1">Комментарий:</h4>
+                                    <p className="text-sm text-gray-700">{invoice.logisticsComment}</p>
+                                  </div>
+                                )}
+
+                                {invoice.files && invoice.files.length > 0 && (
+                                  <div className="mt-4">
+                                    <h4 className="font-bold text-gray-800 mb-2">Прикреплённые файлы:</h4>
+                                    <div className="space-y-2">
+                                      {invoice.files.map((file, idx) => (
+                                        <div key={idx} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-3">
+                                          <div className="flex items-center gap-2">
+                                            <FileText className="w-5 h-5 text-gray-600" />
+                                            <span className="text-sm font-medium text-gray-700">{file.name}</span>
+                                          </div>
+                                          <a
+                                            href={`${API_URL.replace('/api', '')}${file.path}`}
+                                            download={file.name}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
+                                          >
+                                            <Download className="w-4 h-4" />
+                                            Скачать
+                                          </a>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        </>
+      )}
     </div>
   );
 };
@@ -2166,7 +3267,18 @@ const LogisticsPanel = ({ user }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
-  const [activeTab, setActiveTab] = useState('my-invoices'); // вкладки: my-invoices, received-goods, all-invoices
+  const [activeTab, setActiveTab] = useState('my-invoices'); // вкладки: my-invoices, received-goods, all-invoices, expenses
+  const [logistTags, setLogistTags] = useState([]);
+  const [showTagModal, setShowTagModal] = useState(false);
+  const [newTagName, setNewTagName] = useState('');
+  const [newTagColor, setNewTagColor] = useState('#3B82F6');
+
+  // Состояние для расходов
+  const [expenses, setExpenses] = useState([]);
+  const [expenseCategories, setExpenseCategories] = useState([]);
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [editingExpense, setEditingExpense] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -2176,34 +3288,60 @@ const LogisticsPanel = ({ user }) => {
 
   const loadData = async () => {
     try {
-      const [invoicesData, requestsData, usersData, companiesData, commentsData] = await Promise.all([
+      const [invoicesData, requestsData, usersData, companiesData, commentsData, tagsData, expensesData, categoriesData] = await Promise.all([
         api.getInvoices(),
         api.getRequests(),
         api.getUsers(),
         api.getCompanies(),
-        api.getComments()
+        api.getComments(),
+        fetch(`${API_URL}/logist-tags/${user.id}`).then(r => r.json()),
+        api.getExpenses(),
+        api.getExpenseCategories()
       ]);
-      
+
       setInvoices(invoicesData);
       setRequests(requestsData);
       setUsers(usersData);
       setCompanies(companiesData);
       setComments(commentsData);
+      setLogistTags(tagsData);
+      setExpenses(expensesData);
+      setExpenseCategories(categoriesData);
     } catch (error) {
       console.error('Ошибка загрузки данных:', error);
     }
   };
 
-  // ИСПРАВЛЕНО: Теперь корректно обновляет счет
+  // ИСПРАВЛЕНО: Теперь корректно обновляет счет и сразу обновляет локальное состояние
   const handleTakeInvoice = async (invoiceId) => {
     try {
       await api.updateInvoice(invoiceId, { logistId: user.id });
       const invoice = invoices.find(inv => inv.id === invoiceId);
       await addHistory(user, 'Взятие счёта в работу', 'invoice', invoice.supplier);
+      // Немедленное обновление без ожидания
       await loadData();
     } catch (error) {
       console.error('Ошибка взятия счёта:', error);
       alert('Ошибка взятия счёта в работу');
+    }
+  };
+
+  // Функция для передачи счета другому логисту
+  const handleTransferInvoice = async (invoiceId, newLogistId) => {
+    try {
+      const invoice = invoices.find(inv => inv.id === invoiceId);
+      const newLogist = users.find(u => u.id === newLogistId);
+      if (!newLogist) {
+        alert('Логист не найден');
+        return;
+      }
+
+      await api.updateInvoice(invoiceId, { logistId: newLogistId });
+      await addHistory(user, 'Передача счёта логисту', 'invoice', `${invoice.supplier} -> ${newLogist.name}`);
+      await loadData();
+      alert(`Счет успешно передан логисту ${newLogist.name}`);
+    } catch (error) {
+      alert('Ошибка передачи счёта');
     }
   };
 
@@ -2233,7 +3371,7 @@ const LogisticsPanel = ({ user }) => {
 
   const handleAddComment = async (invoiceId) => {
     if (!newComment.trim()) return;
-    
+
     try {
       await api.createComment({
         id: Date.now().toString(),
@@ -2250,6 +3388,121 @@ const LogisticsPanel = ({ user }) => {
     }
   };
 
+  // Функции для работы с тегами
+  const handleCreateTag = async () => {
+    if (!newTagName.trim()) {
+      alert('Введите название тега');
+      return;
+    }
+
+    try {
+      await fetch(`${API_URL}/logist-tags`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: Date.now().toString(),
+          logistId: user.id,
+          name: newTagName,
+          color: newTagColor,
+          createdAt: new Date().toISOString()
+        })
+      });
+      setNewTagName('');
+      setNewTagColor('#3B82F6');
+      setShowTagModal(false);
+      await loadData();
+    } catch (error) {
+      alert('Ошибка создания тега');
+    }
+  };
+
+  const handleDeleteTag = async (tagId) => {
+    if (!confirm('Удалить тег? Он будет удалён из всех счетов.')) return;
+
+    try {
+      await fetch(`${API_URL}/logist-tags/${tagId}`, {
+        method: 'DELETE'
+      });
+      // Удаляем тег из всех счетов
+      const updatedInvoices = invoices.filter(inv => inv.logistId === user.id && inv.tags && inv.tags.includes(tagId));
+      await Promise.all(
+        updatedInvoices.map(inv =>
+          api.updateInvoice(inv.id, { tags: inv.tags.filter(t => t !== tagId) })
+        )
+      );
+      await loadData();
+    } catch (error) {
+      alert('Ошибка удаления тега');
+    }
+  };
+
+  const handleToggleInvoiceTag = async (invoiceId, tagId) => {
+    try {
+      const invoice = invoices.find(inv => inv.id === invoiceId);
+      const currentTags = invoice.tags || [];
+      const newTags = currentTags.includes(tagId)
+        ? currentTags.filter(t => t !== tagId)
+        : [...currentTags, tagId];
+
+      await api.updateInvoice(invoiceId, { tags: newTags });
+      await loadData();
+    } catch (error) {
+      alert('Ошибка обновления тегов');
+    }
+  };
+
+  // Функция для загрузки фотографий полученных товаров
+  const handleUploadReceivedGoodsPhotos = async (invoiceId, files) => {
+    try {
+      const invoice = invoices.find(inv => inv.id === invoiceId);
+      if (!invoice) {
+        alert('Счет не найден');
+        return;
+      }
+
+      const currentPhotos = invoice.receivedGoodsPhotos || [];
+      const newPhotos = await Promise.all(
+        Array.from(files).map(async file => {
+          const data = await readFileAsDataURL(file);
+          return {
+            name: file.name,
+            size: file.size,
+            data
+          };
+        })
+      );
+
+      const updatedPhotos = [...currentPhotos, ...newPhotos];
+      await api.updateInvoice(invoiceId, { receivedGoodsPhotos: updatedPhotos });
+      await addHistory(user, 'Добавление фото товара', 'invoice', `${invoice.supplier} - добавлено ${newPhotos.length} фото`);
+      await loadData();
+    } catch (error) {
+      console.error('Ошибка загрузки фотографий:', error);
+      alert('Ошибка загрузки фотографий: ' + error.message);
+    }
+  };
+
+  // Функция для удаления фотографии
+  const handleDeleteReceivedGoodsPhoto = async (invoiceId, photoIndex) => {
+    if (!confirm('Удалить эту фотографию?')) return;
+
+    try {
+      const invoice = invoices.find(inv => inv.id === invoiceId);
+      if (!invoice) {
+        alert('Счет не найден');
+        return;
+      }
+
+      const currentPhotos = invoice.receivedGoodsPhotos || [];
+      const updatedPhotos = currentPhotos.filter((_, index) => index !== photoIndex);
+      await api.updateInvoice(invoiceId, { receivedGoodsPhotos: updatedPhotos });
+      await addHistory(user, 'Удаление фото товара', 'invoice', invoice.supplier);
+      await loadData();
+    } catch (error) {
+      alert('Ошибка удаления фотографии');
+    }
+  };
+
   const logisticsInvoices = invoices.filter(inv => 
     inv.status === 'in_logistics' && !inv.logistId
   );
@@ -2258,8 +3511,12 @@ const LogisticsPanel = ({ user }) => {
     inv.logistId === user.id && ['in_logistics', 'documents_signed', 'in_transit'].includes(inv.status)
   );
 
-  const receivedInvoices = invoices.filter(inv => 
-    inv.logistId === user.id && ['received', 'closed'].includes(inv.status)
+  const receivedInvoices = invoices.filter(inv =>
+    inv.logistId === user.id && ['received', 'closed', 'sold'].includes(inv.status)
+  );
+
+  const soldInvoices = invoices.filter(inv =>
+    inv.logistId === user.id && inv.status === 'sold'
   );
 
   const filteredInvoices = myInvoices
@@ -2310,7 +3567,411 @@ const LogisticsPanel = ({ user }) => {
 
   return (
     <div className="p-6">
-      <h2 className="text-2xl font-bold text-gray-800 mb-6">Панель логистики</h2>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold text-gray-800">Панель логистики</h2>
+        <button
+          onClick={() => setShowTagModal(true)}
+          className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" />
+          Управление тегами
+        </button>
+      </div>
+
+      {/* Вкладка "Расходы" */}
+      {activeTab === 'expenses' && (
+        <div>
+          <div className="mb-6 flex gap-4">
+            <button
+              onClick={() => setShowCategoryModal(true)}
+              className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition flex items-center gap-2"
+            >
+              <Tag className="w-4 h-4" />
+              Управление категориями
+            </button>
+            <button
+              onClick={() => {
+                setEditingExpense(null);
+                setShowExpenseModal(true);
+              }}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Добавить расход
+            </button>
+          </div>
+
+          {/* Список расходов */}
+          <div className="space-y-4">
+            {expenses.length === 0 ? (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center text-gray-600">
+                <Receipt className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                <p className="text-lg font-medium mb-2">Расходов пока нет</p>
+                <p className="text-sm">Добавьте первый расход, нажав кнопку "Добавить расход"</p>
+              </div>
+            ) : (
+              expenses.map(expense => {
+                const category = expenseCategories.find(c => c.id === expense.categoryId);
+                const expenseInvoices = expense.invoiceIds.map(invId =>
+                  invoices.find(inv => inv.id === invId)
+                ).filter(Boolean);
+                const splitAmount = expenseInvoices.length > 0 ? (expense.amount / expenseInvoices.length) : expense.amount;
+
+                return (
+                  <div key={expense.id} className="bg-white border-2 border-orange-200 rounded-lg p-4 hover:shadow-md transition">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="bg-gradient-to-r from-orange-500 to-red-500 text-white px-3 py-1 rounded-full text-sm font-bold">
+                            {expense.amount.toLocaleString('ru-RU')} ₽
+                          </div>
+                          <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
+                            {category?.name || 'Без категории'}
+                          </span>
+                          {expenseInvoices.length > 1 && (
+                            <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium flex items-center gap-1">
+                              <Split className="w-4 h-4" />
+                              Разделён на {expenseInvoices.length} счёта ({splitAmount.toLocaleString('ru-RU')} ₽ каждый)
+                            </span>
+                          )}
+                        </div>
+
+                        {expense.description && (
+                          <p className="text-gray-700 mb-3">{expense.description}</p>
+                        )}
+
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium text-gray-700">Привязан к счетам:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {expenseInvoices.map(invoice => (
+                              <div key={invoice.id} className="bg-gray-100 px-3 py-1 rounded-lg text-sm">
+                                <span className="font-medium">{invoice.supplier}</span>
+                                <span className="text-gray-600"> • {invoice.number}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-gray-500 mt-3">
+                          Создан: {new Date(expense.createdAt).toLocaleString('ru-RU')}
+                        </p>
+                      </div>
+
+                      <div className="ml-4 flex flex-col gap-2">
+                        <button
+                          onClick={() => {
+                            setEditingExpense(expense);
+                            setShowExpenseModal(true);
+                          }}
+                          className="bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition text-sm"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (confirm('Удалить этот расход?')) {
+                              await api.deleteExpense(expense.id);
+                              await loadData();
+                            }
+                          }}
+                          className="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition text-sm"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Модальное окно для управления тегами */}
+      {showTagModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-800">Мои теги</h3>
+              <button
+                onClick={() => setShowTagModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Создание нового тега */}
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+              <h4 className="font-bold text-gray-700 mb-3">Создать новый тег</h4>
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  value={newTagName}
+                  onChange={(e) => setNewTagName(e.target.value)}
+                  placeholder="Название тега..."
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  onKeyPress={(e) => e.key === 'Enter' && handleCreateTag()}
+                />
+                <input
+                  type="color"
+                  value={newTagColor}
+                  onChange={(e) => setNewTagColor(e.target.value)}
+                  className="w-16 h-10 rounded-lg cursor-pointer"
+                />
+                <button
+                  onClick={handleCreateTag}
+                  className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition"
+                >
+                  Создать
+                </button>
+              </div>
+            </div>
+
+            {/* Список тегов */}
+            <div className="space-y-2">
+              <h4 className="font-bold text-gray-700 mb-3">Мои теги ({logistTags.length})</h4>
+              {logistTags.length === 0 ? (
+                <p className="text-gray-500 text-center py-4">У вас пока нет тегов</p>
+              ) : (
+                logistTags.map(tag => (
+                  <div
+                    key={tag.id}
+                    className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:shadow-md transition"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-4 h-4 rounded"
+                        style={{ backgroundColor: tag.color }}
+                      />
+                      <span className="font-medium text-gray-800">{tag.name}</span>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteTag(tag.id)}
+                      className="text-red-600 hover:text-red-700 p-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модальное окно для управления категориями расходов */}
+      {showCategoryModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-800">Категории расходов</h3>
+              <button
+                onClick={() => setShowCategoryModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Название категории"
+                  value={newTagName}
+                  onChange={(e) => setNewTagName(e.target.value)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                />
+                <button
+                  onClick={async () => {
+                    if (!newTagName.trim()) return;
+                    await api.createExpenseCategory({
+                      id: Date.now().toString(),
+                      name: newTagName.trim(),
+                      createdBy: user.id,
+                      createdAt: new Date().toISOString()
+                    });
+                    setNewTagName('');
+                    await loadData();
+                  }}
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {expenseCategories.length === 0 ? (
+                <p className="text-gray-500 text-center py-4">Категорий пока нет</p>
+              ) : (
+                expenseCategories.map(category => (
+                  <div key={category.id} className="flex items-center justify-between bg-gray-50 px-4 py-2 rounded-lg">
+                    <span className="font-medium">{category.name}</span>
+                    <button
+                      onClick={async () => {
+                        if (confirm(`Удалить категорию "${category.name}"?`)) {
+                          await api.deleteExpenseCategory(category.id);
+                          await loadData();
+                        }
+                      }}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модальное окно для добавления/редактирования расхода */}
+      {showExpenseModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-800">
+                {editingExpense ? 'Редактировать расход' : 'Новый расход'}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowExpenseModal(false);
+                  setEditingExpense(null);
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const selectedInvoiceIds = Array.from(formData.getAll('invoiceIds'));
+
+                if (selectedInvoiceIds.length === 0) {
+                  alert('Выберите хотя бы один счёт');
+                  return;
+                }
+
+                const expenseData = {
+                  categoryId: formData.get('categoryId'),
+                  amount: parseFloat(formData.get('amount')),
+                  description: formData.get('description'),
+                  invoiceIds: selectedInvoiceIds
+                };
+
+                if (editingExpense) {
+                  await api.updateExpense(editingExpense.id, expenseData);
+                } else {
+                  await api.createExpense({
+                    id: Date.now().toString(),
+                    ...expenseData,
+                    createdBy: user.id,
+                    createdAt: new Date().toISOString()
+                  });
+                }
+
+                await loadData();
+                setShowExpenseModal(false);
+                setEditingExpense(null);
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Категория *</label>
+                <select
+                  name="categoryId"
+                  required
+                  defaultValue={editingExpense?.categoryId || ''}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="">Выберите категорию</option>
+                  {expenseCategories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Сумма расхода * (₽)</label>
+                <input
+                  type="number"
+                  name="amount"
+                  required
+                  step="0.01"
+                  min="0"
+                  defaultValue={editingExpense?.amount || ''}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  placeholder="Введите сумму"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Описание</label>
+                <textarea
+                  name="description"
+                  rows="3"
+                  defaultValue={editingExpense?.description || ''}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  placeholder="Опишите расход..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Привязать к счетам * (выберите один или несколько)
+                </label>
+                <div className="border border-gray-300 rounded-lg p-4 max-h-60 overflow-y-auto space-y-2">
+                  {invoices.filter(inv => inv.logistId === user.id).map(invoice => (
+                    <label key={invoice.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                      <input
+                        type="checkbox"
+                        name="invoiceIds"
+                        value={invoice.id}
+                        defaultChecked={editingExpense?.invoiceIds?.includes(invoice.id)}
+                        className="w-4 h-4 text-purple-600"
+                      />
+                      <div className="flex-1">
+                        <span className="font-medium">{invoice.supplier}</span>
+                        <span className="text-gray-600 text-sm"> • {invoice.number}</span>
+                        <span className="text-gray-500 text-sm"> • {invoice.amount} ₽</span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  💡 Если выбрать несколько счетов, расход автоматически разделится между ними поровну
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition font-medium"
+                >
+                  {editingExpense ? 'Сохранить' : 'Добавить расход'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowExpenseModal(false);
+                    setEditingExpense(null);
+                  }}
+                  className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition font-medium"
+                >
+                  Отмена
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ДОБАВЛЕНО: Вкладки */}
       <div className="mb-6 flex gap-4 border-b border-gray-200 overflow-x-auto">
@@ -2346,6 +4007,17 @@ const LogisticsPanel = ({ user }) => {
         >
           <Search className="inline mr-2 w-5 h-5" />
           База всех счетов
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab('expenses');
+            setSearchTerm('');
+            setSelectedInvoice(null);
+          }}
+          className={`px-6 py-3 font-medium transition whitespace-nowrap ${activeTab === 'expenses' ? 'border-b-2 border-orange-600 text-orange-600' : 'text-gray-600 hover:text-gray-900'}`}
+        >
+          <Receipt className="inline mr-2 w-5 h-5" />
+          💰 Расходы ({expenses.length})
         </button>
       </div>
 
@@ -2466,8 +4138,26 @@ const LogisticsPanel = ({ user }) => {
                        invoice.status === 'documents_signed' ? 'Документы подписаны' :
                        'Товар в пути'}
                     </span>
+                    {/* Теги */}
+                    {invoice.tags && invoice.tags.length > 0 && (
+                      <div className="flex gap-2 flex-wrap">
+                        {invoice.tags.map(tagId => {
+                          const tag = logistTags.find(t => t.id === tagId);
+                          if (!tag) return null;
+                          return (
+                            <span
+                              key={tagId}
+                              className="px-2 py-0.5 rounded text-xs font-medium text-white"
+                              style={{ backgroundColor: tag.color }}
+                            >
+                              {tag.name}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-1 text-sm text-gray-600">
                     <p><span className="font-medium">Заявка:</span> {request?.title || 'Удалена'}</p>
                     <p><span className="font-medium">Компания:</span> {company?.name || 'Не указана'}</p>
@@ -2540,6 +4230,24 @@ const LogisticsPanel = ({ user }) => {
                         >
                           Закрыть
                         </button>
+                        <div className="border-t border-gray-300 pt-2 mt-2">
+                          <h4 className="font-bold text-gray-800 mb-2 text-sm">Передать счет:</h4>
+                          <select
+                            onChange={(e) => {
+                              if (e.target.value && confirm(`Передать счет логисту ${users.find(u => u.id === e.target.value)?.name}?`)) {
+                                handleTransferInvoice(invoice.id, e.target.value);
+                                e.target.value = '';
+                              }
+                            }}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm mb-2"
+                            defaultValue=""
+                          >
+                            <option value="">Выберите логиста...</option>
+                            {users.filter(u => u.role === 'logist' && u.id !== user.id).map(logist => (
+                              <option key={logist.id} value={logist.id}>{logist.name}</option>
+                            ))}
+                          </select>
+                        </div>
                         <button
                           onClick={() => handleDeleteInvoice(invoice.id)}
                           className="w-full bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition text-sm font-medium"
@@ -2549,6 +4257,102 @@ const LogisticsPanel = ({ user }) => {
                       </div>
                     </div>
                   </div>
+
+                  {/* Управление тегами */}
+                  <div className="border-t border-gray-200 pt-4">
+                    <h4 className="font-bold text-gray-800 mb-3">Теги:</h4>
+                    {logistTags.length === 0 ? (
+                      <p className="text-sm text-gray-500">У вас пока нет тегов. Создайте теги в "Управление тегами".</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {logistTags.map(tag => {
+                          const isActive = invoice.tags && invoice.tags.includes(tag.id);
+                          return (
+                            <button
+                              key={tag.id}
+                              onClick={() => handleToggleInvoiceTag(invoice.id, tag.id)}
+                              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                                isActive
+                                  ? 'text-white shadow-md'
+                                  : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
+                              }`}
+                              style={isActive ? { backgroundColor: tag.color } : {}}
+                            >
+                              {tag.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Расходы по счёту */}
+                  {(() => {
+                    const invoiceExpenses = expenses.filter(exp =>
+                      exp.invoiceIds && exp.invoiceIds.includes(invoice.id)
+                    );
+                    const totalExpenses = invoiceExpenses.reduce((sum, exp) => {
+                      const splitAmount = exp.invoiceIds.length > 0 ? (exp.amount / exp.invoiceIds.length) : exp.amount;
+                      return sum + splitAmount;
+                    }, 0);
+
+                    if (invoiceExpenses.length === 0) return null;
+
+                    return (
+                      <div className="border-t border-gray-200 pt-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="font-bold text-gray-800 flex items-center gap-2">
+                            <Receipt className="w-5 h-5 text-orange-600" />
+                            Расходы по этому счёту
+                          </h4>
+                          <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-full text-sm font-bold">
+                            {totalExpenses.toLocaleString('ru-RU')} ₽
+                          </span>
+                        </div>
+                        <div className="space-y-3">
+                          {invoiceExpenses.map(expense => {
+                            const category = expenseCategories.find(c => c.id === expense.categoryId);
+                            const splitAmount = expense.invoiceIds.length > 0 ? (expense.amount / expense.invoiceIds.length) : expense.amount;
+                            const isShared = expense.invoiceIds.length > 1;
+
+                            return (
+                              <div key={expense.id} className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                                <div className="flex justify-between items-start mb-2">
+                                  <div>
+                                    <p className="text-lg font-bold text-orange-600">
+                                      {splitAmount.toLocaleString('ru-RU')} ₽
+                                      {isShared && (
+                                        <span className="ml-2 text-xs text-blue-600">
+                                          (из {expense.amount.toLocaleString('ru-RU')} ₽)
+                                        </span>
+                                      )}
+                                    </p>
+                                    {category && (
+                                      <span className="inline-block px-2 py-1 bg-orange-200 text-orange-800 rounded text-xs font-medium mt-1">
+                                        {category.name}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {isShared && (
+                                    <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium flex items-center gap-1">
+                                      <Split className="w-3 h-3" />
+                                      Разделён на {expense.invoiceIds.length}
+                                    </span>
+                                  )}
+                                </div>
+                                {expense.description && (
+                                  <p className="text-sm text-gray-700 mb-2">{expense.description}</p>
+                                )}
+                                <p className="text-xs text-gray-500">
+                                  Добавлено: {new Date(expense.createdAt).toLocaleDateString('ru-RU')} в {new Date(expense.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {invoice.logisticsComment && (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
@@ -2689,9 +4493,13 @@ const LogisticsPanel = ({ user }) => {
                       <div className="flex items-center gap-3 mb-2 flex-wrap">
                         <h3 className="font-bold text-xl text-gray-800">{invoice.supplier}</h3>
                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          invoice.status === 'received' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-700'
+                          invoice.status === 'received' ? 'bg-green-100 text-green-700' :
+                          invoice.status === 'sold' ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white' :
+                          'bg-gray-200 text-gray-700'
                         }`}>
-                          {invoice.status === 'received' ? 'Товар получен' : 'Закрыто'}
+                          {invoice.status === 'received' ? 'Товар получен' :
+                           invoice.status === 'sold' ? '💰 Продан' :
+                           'Закрыто'}
                         </span>
                       </div>
                       
@@ -2745,6 +4553,12 @@ const LogisticsPanel = ({ user }) => {
                           <div className="space-y-2">
                             {invoice.status === 'received' && (
                               <>
+                                <button
+                                  onClick={() => handleStatusChange(invoice.id, 'sold')}
+                                  className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white px-4 py-2 rounded-lg hover:from-green-700 hover:to-emerald-700 transition text-sm font-medium shadow-md"
+                                >
+                                  💰 Продан
+                                </button>
                                 <button
                                   onClick={() => handleStatusChange(invoice.id, 'closed')}
                                   className="w-full bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition text-sm font-medium"
@@ -2810,6 +4624,142 @@ const LogisticsPanel = ({ user }) => {
                           </div>
                         </div>
                       )}
+
+                      {/* Расходы по счёту */}
+                      {(() => {
+                        const invoiceExpenses = expenses.filter(exp =>
+                          exp.invoiceIds && exp.invoiceIds.includes(invoice.id)
+                        );
+                        const totalExpenses = invoiceExpenses.reduce((sum, exp) => {
+                          const splitAmount = exp.invoiceIds.length > 0 ? (exp.amount / exp.invoiceIds.length) : exp.amount;
+                          return sum + splitAmount;
+                        }, 0);
+
+                        if (invoiceExpenses.length === 0) return null;
+
+                        return (
+                          <div>
+                            <div className="flex items-center justify-between mb-3">
+                              <h4 className="font-bold text-gray-800 flex items-center gap-2">
+                                <Receipt className="w-5 h-5 text-orange-600" />
+                                Расходы по этому счёту
+                              </h4>
+                              <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-full text-sm font-bold">
+                                {totalExpenses.toLocaleString('ru-RU')} ₽
+                              </span>
+                            </div>
+                            <div className="space-y-3">
+                              {invoiceExpenses.map(expense => {
+                                const category = expenseCategories.find(c => c.id === expense.categoryId);
+                                const splitAmount = expense.invoiceIds.length > 0 ? (expense.amount / expense.invoiceIds.length) : expense.amount;
+                                const isShared = expense.invoiceIds.length > 1;
+
+                                return (
+                                  <div key={expense.id} className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                                    <div className="flex justify-between items-start mb-2">
+                                      <div>
+                                        <p className="text-lg font-bold text-orange-600">
+                                          {splitAmount.toLocaleString('ru-RU')} ₽
+                                          {isShared && (
+                                            <span className="ml-2 text-xs text-blue-600">
+                                              (из {expense.amount.toLocaleString('ru-RU')} ₽)
+                                            </span>
+                                          )}
+                                        </p>
+                                        {category && (
+                                          <span className="inline-block px-2 py-1 bg-orange-200 text-orange-800 rounded text-xs font-medium mt-1">
+                                            {category.name}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {isShared && (
+                                        <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium flex items-center gap-1">
+                                          <Split className="w-3 h-3" />
+                                          Разделён на {expense.invoiceIds.length}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {expense.description && (
+                                      <p className="text-sm text-gray-700 mb-2">{expense.description}</p>
+                                    )}
+                                    <p className="text-xs text-gray-500">
+                                      Добавлено: {new Date(expense.createdAt).toLocaleDateString('ru-RU')} в {new Date(expense.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Галерея фотографий полученных товаров */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-bold text-gray-800 flex items-center gap-2">
+                            <Camera className="w-5 h-5 text-green-600" />
+                            Фотографии полученных товаров ({invoice.receivedGoodsPhotos?.length || 0})
+                          </h4>
+                          <label className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition text-sm font-medium cursor-pointer flex items-center gap-2">
+                            <Upload className="w-4 h-4" />
+                            Загрузить фото
+                            <input
+                              type="file"
+                              multiple
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                if (e.target.files && e.target.files.length > 0) {
+                                  handleUploadReceivedGoodsPhotos(invoice.id, e.target.files);
+                                  e.target.value = '';
+                                }
+                              }}
+                            />
+                          </label>
+                        </div>
+
+                        {invoice.receivedGoodsPhotos && invoice.receivedGoodsPhotos.length > 0 ? (
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                            {invoice.receivedGoodsPhotos.map((photo, idx) => (
+                              <div key={idx} className="relative group bg-gray-50 border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition">
+                                <img
+                                  src={`${API_URL.replace('/api', '')}${photo.path}`}
+                                  alt={photo.name}
+                                  className="w-full h-48 object-cover cursor-pointer"
+                                  onClick={() => window.open(`${API_URL.replace('/api', '')}${photo.path}`, '_blank')}
+                                />
+                                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition flex items-center justify-center">
+                                  <div className="opacity-0 group-hover:opacity-100 transition flex gap-2">
+                                    <button
+                                      onClick={() => window.open(`${API_URL.replace('/api', '')}${photo.path}`, '_blank')}
+                                      className="bg-white text-gray-800 p-2 rounded-lg hover:bg-gray-100 transition"
+                                      title="Открыть в полном размере"
+                                    >
+                                      <Eye className="w-5 h-5" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteReceivedGoodsPhoto(invoice.id, idx)}
+                                      className="bg-red-600 text-white p-2 rounded-lg hover:bg-red-700 transition"
+                                      title="Удалить фото"
+                                    >
+                                      <Trash2 className="w-5 h-5" />
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="p-2 bg-white border-t border-gray-200">
+                                  <p className="text-xs text-gray-600 truncate">{photo.name}</p>
+                                  <p className="text-xs text-gray-500">{(photo.size / 1024).toFixed(1)} KB</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
+                            <ImageIcon className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                            <p className="text-sm text-gray-500">Фотографий пока нет. Нажмите "Загрузить фото" чтобы добавить.</p>
+                          </div>
+                        )}
+                      </div>
 
                       <div>
                         <h4 className="font-bold text-gray-800 mb-2">Комментарии:</h4>

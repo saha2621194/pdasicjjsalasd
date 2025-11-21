@@ -17,8 +17,9 @@ const PORT = 3001;
 const UPLOADS_DIR = join(__dirname, 'uploads');
 const COMPANY_DOCS_DIR = join(UPLOADS_DIR, 'company-docs');
 const INVOICE_FILES_DIR = join(UPLOADS_DIR, 'invoice-files');
+const RECEIVED_GOODS_PHOTOS_DIR = join(UPLOADS_DIR, 'received-goods-photos');
 
-[UPLOADS_DIR, COMPANY_DOCS_DIR, INVOICE_FILES_DIR].forEach(dir => {
+[UPLOADS_DIR, COMPANY_DOCS_DIR, INVOICE_FILES_DIR, RECEIVED_GOODS_PHOTOS_DIR].forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -93,8 +94,17 @@ db.exec(`
     files TEXT,
     status TEXT NOT NULL,
     createdAt TEXT NOT NULL,
-    sentToLogisticsAt TEXT
-	receivedGoodsPhotos TEXT
+    sentToLogisticsAt TEXT,
+    receivedGoodsPhotos TEXT,
+    tags TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS logist_tags (
+    id TEXT PRIMARY KEY,
+    logistId TEXT NOT NULL,
+    name TEXT NOT NULL,
+    color TEXT NOT NULL,
+    createdAt TEXT NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS comments (
@@ -114,7 +124,45 @@ db.exec(`
     entity TEXT NOT NULL,
     details TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS expense_categories (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    createdBy TEXT NOT NULL,
+    createdAt TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS expenses (
+    id TEXT PRIMARY KEY,
+    categoryId TEXT NOT NULL,
+    amount REAL NOT NULL,
+    description TEXT,
+    invoiceIds TEXT NOT NULL,
+    createdBy TEXT NOT NULL,
+    createdAt TEXT NOT NULL
+  );
 `);
+
+// Миграция: добавление колонки receivedGoodsPhotos если её нет
+try {
+  const tableInfo = db.prepare("PRAGMA table_info(invoices)").all();
+  const hasReceivedGoodsPhotos = tableInfo.some(col => col.name === 'receivedGoodsPhotos');
+  const hasTags = tableInfo.some(col => col.name === 'tags');
+
+  if (!hasReceivedGoodsPhotos) {
+    console.log('Adding receivedGoodsPhotos column to invoices table...');
+    db.exec('ALTER TABLE invoices ADD COLUMN receivedGoodsPhotos TEXT');
+    console.log('Migration for receivedGoodsPhotos completed successfully');
+  }
+
+  if (!hasTags) {
+    console.log('Adding tags column to invoices table...');
+    db.exec('ALTER TABLE invoices ADD COLUMN tags TEXT');
+    console.log('Migration for tags completed successfully');
+  }
+} catch (error) {
+  console.error('Migration error:', error);
+}
 
 // Создание индексов для быстрого поиска
 db.exec(`
@@ -164,14 +212,28 @@ const statements = {
   getRequestById: db.prepare('SELECT * FROM requests WHERE id = ?'),
   
   getAllInvoices: db.prepare('SELECT * FROM invoices'),
-  insertInvoice: db.prepare('INSERT INTO invoices (id, requestId, managerId, logistId, companyId, website, supplier, number, amount, contactPerson, phone, email, logisticsComment, files, status, createdAt, sentToLogisticsAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'),
+  insertInvoice: db.prepare('INSERT INTO invoices (id, requestId, managerId, logistId, companyId, website, supplier, number, amount, contactPerson, phone, email, logisticsComment, files, status, createdAt, sentToLogisticsAt, receivedGoodsPhotos, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'),
   getInvoiceById: db.prepare('SELECT * FROM invoices WHERE id = ?'),
-  
+
   getAllComments: db.prepare('SELECT * FROM comments'),
   insertComment: db.prepare('INSERT INTO comments (id, invoiceId, userId, userName, text, createdAt) VALUES (?, ?, ?, ?, ?, ?)'),
-  
+
+  getAllLogistTags: db.prepare('SELECT * FROM logist_tags'),
+  getLogistTagsByUserId: db.prepare('SELECT * FROM logist_tags WHERE logistId = ?'),
+  insertLogistTag: db.prepare('INSERT INTO logist_tags (id, logistId, name, color, createdAt) VALUES (?, ?, ?, ?, ?)'),
+  deleteLogistTag: db.prepare('DELETE FROM logist_tags WHERE id = ?'),
+
   getRecentHistory: db.prepare('SELECT * FROM history ORDER BY date DESC LIMIT 100'),
-  insertHistory: db.prepare('INSERT INTO history (id, date, user, action, entity, details) VALUES (?, ?, ?, ?, ?, ?)')
+  insertHistory: db.prepare('INSERT INTO history (id, date, user, action, entity, details) VALUES (?, ?, ?, ?, ?, ?)'),
+
+  getAllExpenseCategories: db.prepare('SELECT * FROM expense_categories ORDER BY name'),
+  insertExpenseCategory: db.prepare('INSERT INTO expense_categories (id, name, createdBy, createdAt) VALUES (?, ?, ?, ?)'),
+  deleteExpenseCategory: db.prepare('DELETE FROM expense_categories WHERE id = ?'),
+
+  getAllExpenses: db.prepare('SELECT * FROM expenses ORDER BY createdAt DESC'),
+  insertExpense: db.prepare('INSERT INTO expenses (id, categoryId, amount, description, invoiceIds, createdBy, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)'),
+  updateExpense: db.prepare('UPDATE expenses SET categoryId = ?, amount = ?, description = ?, invoiceIds = ? WHERE id = ?'),
+  deleteExpense: db.prepare('DELETE FROM expenses WHERE id = ?')
 };
 
 // Инициализация данных по умолчанию
@@ -426,7 +488,9 @@ app.get('/api/invoices', (req, res) => {
     const invoices = statements.getAllInvoices.all();
     res.json(invoices.map(i => ({
       ...i,
-      files: i.files ? JSON.parse(i.files) : []
+      files: i.files ? JSON.parse(i.files) : [],
+      receivedGoodsPhotos: i.receivedGoodsPhotos ? JSON.parse(i.receivedGoodsPhotos) : [],
+      tags: i.tags ? JSON.parse(i.tags) : []
     })));
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -449,10 +513,10 @@ app.post('/api/invoices', (req, res) => {
     });
     
     statements.insertInvoice.run(
-      id, requestId, managerId, logistId || null, companyId || null, 
-      website || '', supplier, number, amount, contactPerson, phone, 
-      email || '', logisticsComment || '', JSON.stringify(savedFiles), 
-      status, createdAt, sentToLogisticsAt || null
+      id, requestId, managerId, logistId || null, companyId || null,
+      website || '', supplier, number, amount, contactPerson, phone,
+      email || '', logisticsComment || '', JSON.stringify(savedFiles),
+      status, createdAt, sentToLogisticsAt || null, '[]', '[]'
     );
     updateTimestamp();
     res.json({ success: true });
@@ -473,7 +537,9 @@ app.put('/api/invoices/:id', (req, res) => {
 
     // Парсим текущие файлы
     const currentFiles = currentInvoice.files ? JSON.parse(currentInvoice.files) : [];
-    
+    const currentReceivedGoodsPhotos = currentInvoice.receivedGoodsPhotos ? JSON.parse(currentInvoice.receivedGoodsPhotos) : [];
+    const currentTags = currentInvoice.tags ? JSON.parse(currentInvoice.tags) : [];
+
     // Обрабатываем новые файлы если они есть
     let updatedFiles = currentFiles;
     if (req.body.files) {
@@ -488,6 +554,28 @@ app.put('/api/invoices/:id', (req, res) => {
         }
         return file;
       });
+    }
+
+    // Обрабатываем фотографии полученных товаров
+    let updatedReceivedGoodsPhotos = currentReceivedGoodsPhotos;
+    if (req.body.receivedGoodsPhotos !== undefined) {
+      updatedReceivedGoodsPhotos = req.body.receivedGoodsPhotos.map(photo => {
+        if (photo.data && photo.data.startsWith('data:')) {
+          const savedFilename = saveBase64File(photo.data, photo.name, RECEIVED_GOODS_PHOTOS_DIR);
+          return {
+            name: photo.name,
+            size: photo.size,
+            path: `/uploads/received-goods-photos/${savedFilename}`
+          };
+        }
+        return photo;
+      });
+    }
+
+    // Обрабатываем теги
+    let updatedTags = currentTags;
+    if (req.body.tags !== undefined) {
+      updatedTags = req.body.tags;
     }
 
     // Формируем данные для обновления - берем из body или оставляем текущие значения
@@ -505,6 +593,8 @@ app.put('/api/invoices/:id', (req, res) => {
       email: req.body.email !== undefined ? req.body.email : currentInvoice.email,
       logisticsComment: req.body.logisticsComment !== undefined ? req.body.logisticsComment : currentInvoice.logisticsComment,
       files: JSON.stringify(updatedFiles),
+      receivedGoodsPhotos: JSON.stringify(updatedReceivedGoodsPhotos),
+      tags: JSON.stringify(updatedTags),
       status: req.body.status !== undefined ? req.body.status : currentInvoice.status,
       createdAt: currentInvoice.createdAt,
       sentToLogisticsAt: req.body.sentToLogisticsAt !== undefined ? req.body.sentToLogisticsAt : currentInvoice.sentToLogisticsAt
@@ -512,10 +602,10 @@ app.put('/api/invoices/:id', (req, res) => {
 
     // Выполняем обновление
     const updateStmt = db.prepare(`
-      UPDATE invoices 
-      SET requestId = ?, managerId = ?, logistId = ?, companyId = ?, website = ?, 
-          supplier = ?, number = ?, amount = ?, contactPerson = ?, phone = ?, 
-          email = ?, logisticsComment = ?, files = ?, status = ?, 
+      UPDATE invoices
+      SET requestId = ?, managerId = ?, logistId = ?, companyId = ?, website = ?,
+          supplier = ?, number = ?, amount = ?, contactPerson = ?, phone = ?,
+          email = ?, logisticsComment = ?, files = ?, receivedGoodsPhotos = ?, tags = ?, status = ?,
           createdAt = ?, sentToLogisticsAt = ?
       WHERE id = ?
     `);
@@ -534,6 +624,8 @@ app.put('/api/invoices/:id', (req, res) => {
       updateData.email,
       updateData.logisticsComment,
       updateData.files,
+      updateData.receivedGoodsPhotos,
+      updateData.tags,
       updateData.status,
       updateData.createdAt,
       updateData.sentToLogisticsAt,
@@ -544,6 +636,137 @@ app.put('/api/invoices/:id', (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Ошибка обновления счета:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Logist Tags API
+app.get('/api/logist-tags', (req, res) => {
+  try {
+    const tags = statements.getAllLogistTags.all();
+    res.json(tags);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/logist-tags/:logistId', (req, res) => {
+  try {
+    const tags = statements.getLogistTagsByUserId.all(req.params.logistId);
+    res.json(tags);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/logist-tags', (req, res) => {
+  const { id, logistId, name, color, createdAt } = req.body;
+  try {
+    statements.insertLogistTag.run(id, logistId, name, color, createdAt);
+    updateTimestamp();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/logist-tags/:id', (req, res) => {
+  try {
+    statements.deleteLogistTag.run(req.params.id);
+    updateTimestamp();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Expense Categories
+app.get('/api/expense-categories', (req, res) => {
+  try {
+    const categories = statements.getAllExpenseCategories.all();
+    res.json(categories);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/expense-categories', (req, res) => {
+  const { id, name, createdBy, createdAt } = req.body;
+  try {
+    statements.insertExpenseCategory.run(id, name, createdBy, createdAt);
+    updateTimestamp();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/expense-categories/:id', (req, res) => {
+  try {
+    statements.deleteExpenseCategory.run(req.params.id);
+    updateTimestamp();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Expenses
+app.get('/api/expenses', (req, res) => {
+  try {
+    const expenses = statements.getAllExpenses.all();
+    const parsedExpenses = expenses.map(exp => ({
+      ...exp,
+      invoiceIds: exp.invoiceIds ? JSON.parse(exp.invoiceIds) : []
+    }));
+    res.json(parsedExpenses);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/expenses', (req, res) => {
+  const { id, categoryId, amount, description, invoiceIds, createdBy, createdAt } = req.body;
+  try {
+    statements.insertExpense.run(
+      id,
+      categoryId,
+      amount,
+      description || '',
+      JSON.stringify(invoiceIds),
+      createdBy,
+      createdAt
+    );
+    updateTimestamp();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/expenses/:id', (req, res) => {
+  const { categoryId, amount, description, invoiceIds } = req.body;
+  try {
+    statements.updateExpense.run(
+      categoryId,
+      amount,
+      description || '',
+      JSON.stringify(invoiceIds),
+      req.params.id
+    );
+    updateTimestamp();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/expenses/:id', (req, res) => {
+  try {
+    statements.deleteExpense.run(req.params.id);
+    updateTimestamp();
+    res.json({ success: true });
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
